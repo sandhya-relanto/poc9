@@ -1,5 +1,5 @@
 import { supabase } from '../db/supabase'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Groq from 'groq-sdk'
 
 export const getMySessions = async (req: any, res: any) => {
   const repId = req.user.id
@@ -91,37 +91,127 @@ Keep responses to 2-4 sentences maximum.
 ${scenario.difficulty === 'beginner' ? 'beginner: friendly and easy' : scenario.difficulty === 'intermediate' ? 'intermediate: neutral with some pushback' : 'advanced: skeptical, challenge everything, hard objections'}`
 
     const history = session.messages_json || []
-    const newHistory = [...history, { role: 'user', parts: [{ text: message }] }]
     
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      systemInstruction
+    const normalizedHistory = history.map((m: any) => {
+      let content = m.content
+      if (!content && m.parts && m.parts.length > 0) {
+        content = m.parts[0].text
+      }
+      const role = (m.role === 'model') ? 'assistant' : m.role
+      return { role, content: content || '' }
     })
     
-    const chat = model.startChat({ history })
-    const result = await chat.sendMessage(message)
-    const text = result.response.text()
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+    
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        ...normalizedHistory,
+        { role: 'user', content: message }
+      ],
+      max_tokens: 500,
+      temperature: 0.7
+    })
+    
+    const replyText = completion.choices[0].message.content
 
-    if (!text) {
-      throw new Error("Empty response from Gemini")
+    if (!replyText) {
+      throw new Error("Empty response from Groq")
     }
 
-    console.log("Gemini response:", text)
-    
-    const updatedHistory = [...newHistory, { role: 'model', parts: [{ text }] }]
+    const updatedHistory = [...normalizedHistory, { role: 'user', content: message }, { role: 'assistant', content: replyText }]
     
     await supabase
       .from('training_sessions')
       .update({ messages_json: updatedHistory })
       .eq('id', sessionId)
       
-    return res.json({ reply: text })
+    return res.json({ reply: replyText })
   } catch (err: any) {
-    console.error("Gemini error:", err)
+    console.error("Groq error:", err)
     return res.status(200).json({
       reply: "Sorry, I couldn't process that. Please try again."
     })
+  }
+}
+
+export const sendVoiceMessage = async (req: any, res: any) => {
+  const { sessionId } = req.body
+  const audioFile = req.file
+
+  if (!sessionId || !audioFile) {
+    return res.status(400).json({ error: 'sessionId and audio file are required' })
+  }
+
+  try {
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+
+    // 1. Transcribe audio using the requested File pattern
+    const transcription = await groq.audio.transcriptions.create({
+      file: new File([audioFile.buffer], 'audio.webm', { 
+        type: audioFile.mimetype 
+      }),
+      model: 'whisper-large-v3',
+      language: 'en'
+    })
+
+    const userText = transcription.text
+    if (!userText) throw new Error("Transcription failed")
+
+    // 2. Fetch session context
+    const { data: session, error: sessionErr } = await supabase
+      .from('training_sessions')
+      .select('*, training_scenarios(*)')
+      .eq('id', sessionId)
+      .single()
+
+    if (sessionErr || !session) throw new Error('Session not found')
+    
+    const scenario = session.training_scenarios
+    const systemInstruction = `You are ${scenario.persona_name}, a ${scenario.persona_type}.
+Context: ${scenario.context_text}.
+Difficulty: ${scenario.difficulty}.
+You are in a sales call with a rep. Stay in character always.
+Keep responses to 2-4 sentences maximum.
+${scenario.difficulty === 'beginner' ? 'beginner: friendly and easy' : scenario.difficulty === 'intermediate' ? 'intermediate: neutral with some pushback' : 'advanced: skeptical, challenge everything, hard objections'}`
+
+    const history = session.messages_json || []
+    const normalizedHistory = history.map((m: any) => {
+      let content = m.content
+      if (!content && m.parts && m.parts.length > 0) {
+        content = m.parts[0].text
+      }
+      const role = (m.role === 'model') ? 'assistant' : m.role
+      return { role, content: content || '' }
+    })
+
+    // 3. Get AI reply
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemInstruction },
+        ...normalizedHistory,
+        { role: 'user', content: userText }
+      ],
+      max_tokens: 500,
+      temperature: 0.7
+    })
+
+    const replyText = completion.choices[0].message.content
+    if (!replyText) throw new Error("Empty response from Groq")
+
+    // 4. Save history
+    const updatedHistory = [...normalizedHistory, { role: 'user', content: userText }, { role: 'assistant', content: replyText }]
+    await supabase
+      .from('training_sessions')
+      .update({ messages_json: updatedHistory })
+      .eq('id', sessionId)
+
+    return res.json({ userText, reply: replyText })
+  } catch (err: any) {
+    console.error("Voice message error:", err)
+    return res.status(500).json({ error: err.message })
   }
 }
 
@@ -139,39 +229,54 @@ export const endSession = async (req: any, res: any) => {
       
     if (!session) throw new Error('Session not found')
       
-    const transcript = (session.messages_json || []).map((m: any) => 
-      `${m.role}: ${m.parts[0].text}`
-    ).join('\n')
+    const transcript = (session.messages_json || []).map((m: any) => {
+      let content = m.content
+      if (!content && m.parts && m.parts.length > 0) {
+        content = m.parts[0].text
+      }
+      const role = (m.role === 'model') ? 'assistant' : m.role
+      return `${role}: ${content}`
+    }).join('\n')
     
-    const prompt = `Analyse this sales practice conversation.
-Return ONLY raw JSON with no markdown backticks:
-{
-  "scores": {
-    "opening": number 1-5,
-    "discovery": number 1-5,
-    "objection_handling": number 1-5,
-    "talk_ratio": number 1-5,
-    "closing": number 1-5
-  },
-  "strengths": ["max 3 items"],
-  "improvements": ["max 3 items"],
-  "overall_score": number 0-100
-}
-
-Transcript:
-${transcript}`
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
+    
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a sales coach analyst. Return only raw JSON, no markdown, no backticks.' 
+        },
+        { 
+          role: 'user', 
+          content: `Analyse this sales conversation transcript and return ONLY this JSON object:
+      {
+        "scores": {
+          "opening": number between 1-5,
+          "discovery": number between 1-5,
+          "objection_handling": number between 1-5,
+          "talk_ratio": number between 1-5,
+          "closing": number between 1-5
+        },
+        "strengths": ["strength 1", "strength 2", "strength 3"],
+        "improvements": ["improvement 1", "improvement 2", "improvement 3"],
+        "overall_score": number between 0-100
+      }
+      
+      Transcript:
+      ${transcript}`
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.3
+    })
+    
+    const text = completion.choices[0].message.content
 
     if (!text) {
-      throw new Error("Empty response from Gemini")
+      throw new Error("Empty response from Groq")
     }
 
-    console.log("Gemini response:", text)
-    
     const jsonText = text.replace(/`json|`/g, "").trim()
     const feedback = JSON.parse(jsonText)
     
@@ -185,7 +290,7 @@ ${transcript}`
       
     return res.json(feedback)
   } catch (err: any) {
-    console.error("Gemini error:", err)
+    console.error("Groq feedback error:", err)
     return res.status(200).json({
       scores: {
         opening: 0,

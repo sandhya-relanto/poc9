@@ -1,9 +1,18 @@
 import express from 'express'
+import multer from 'multer'
 import { authenticate } from '../middleware/auth'
 import { repOnly } from '../middleware/roleGuard'
-import { getMySessions, startSession, sendMessage, endSession, getSession } from '../controllers/sessionController'
+import { 
+  getMySessions, 
+  startSession, 
+  sendMessage, 
+  sendVoiceMessage, 
+  endSession, 
+  getSession 
+} from '../controllers/sessionController'
 
 const router = express.Router()
+const upload = multer({ storage: multer.memoryStorage() })
 
 // GET /api/sessions/my-sessions
 router.get('/my-sessions', authenticate, repOnly, getMySessions)
@@ -13,6 +22,9 @@ router.post('/start', authenticate, repOnly, startSession)
 
 // POST /api/sessions/message
 router.post('/message', authenticate, repOnly, sendMessage)
+
+// POST /api/sessions/voice-message
+router.post('/voice-message', authenticate, repOnly, upload.single('audio'), sendVoiceMessage)
 
 // POST /api/sessions/end
 router.post('/end', authenticate, repOnly, endSession)
