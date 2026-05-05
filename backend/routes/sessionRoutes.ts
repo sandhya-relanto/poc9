@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth'
 import { repOnly } from '../middleware/roleGuard'
 import { 
   getMySessions, 
-  startSession, 
+  startPractice, 
   sendMessage, 
   sendVoiceMessage, 
   endSession, 
@@ -18,7 +18,7 @@ const upload = multer({ storage: multer.memoryStorage() })
 router.get('/my-sessions', authenticate, repOnly, getMySessions)
 
 // POST /api/sessions/start
-router.post('/start', authenticate, repOnly, startSession)
+router.post('/start', authenticate, repOnly, startPractice)
 
 // POST /api/sessions/message
 router.post('/message', authenticate, repOnly, sendMessage)

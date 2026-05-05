@@ -7,6 +7,7 @@ import Link from 'next/link'
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function FeedbackPage({ params }: { params: { scenarioId: string } }) {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('sessionId')
   
@@ -32,9 +33,9 @@ export default function FeedbackPage({ params }: { params: { scenarioId: string 
     }
     
     if (sessionId) {
-      fetchSession()
+      router.push(`/rep/train/${params.scenarioId}/review?sessionId=${sessionId}`)
     }
-  }, [sessionId])
+  }, [sessionId, params.scenarioId, router])
 
   if (loading || !session || !session.feedback_json) {
     return (
@@ -55,8 +56,8 @@ export default function FeedbackPage({ params }: { params: { scenarioId: string 
   }
 
   const getBarColor = (score: number) => {
-    if (score <= 2) return 'bg-red-500'
-    if (score <= 3) return 'bg-yellow-500'
+    if (score <= 40) return 'bg-red-500'
+    if (score <= 70) return 'bg-yellow-500'
     return 'bg-green-500'
   }
 
@@ -84,25 +85,25 @@ export default function FeedbackPage({ params }: { params: { scenarioId: string 
             <h3 className="text-lg font-semibold text-white mb-4">Detailed Metrics</h3>
             
             {[
-              { label: 'Opening', key: 'opening' },
-              { label: 'Discovery', key: 'discovery' },
+              { label: 'Empathy', key: 'empathy' },
               { label: 'Objection Handling', key: 'objection_handling' },
-              { label: 'Talk Ratio', key: 'talk_ratio' },
-              { label: 'Closing', key: 'closing' },
+              { label: 'Confidence', key: 'confidence' },
+              { label: 'Listening', key: 'listening' },
+              { label: 'Executive Communication', key: 'executive_communication' },
+              { label: 'Questioning Ability', key: 'questioning_ability' },
             ].map((metric) => {
               const val = scores[metric.key] || 0
-              const percentage = (val / 5) * 100
               
               return (
                 <div key={metric.key}>
                   <div className="flex justify-between text-sm mb-1.5">
                     <span className="text-gray-300">{metric.label}</span>
-                    <span className="font-medium text-gray-100">{val} / 5</span>
+                    <span className="font-medium text-gray-100">{val}%</span>
                   </div>
-                  <div className="w-full bg-gray-800 rounded-full h-2">
+                  <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden border border-gray-700/50">
                     <div 
                       className={`h-2 rounded-full ${getBarColor(val)} transition-all duration-1000`} 
-                      style={{ width: `${percentage}%` }}
+                      style={{ width: `${val}%` }}
                     ></div>
                   </div>
                 </div>
@@ -151,7 +152,7 @@ export default function FeedbackPage({ params }: { params: { scenarioId: string 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8 border-t border-gray-800">
           <Link 
-            href={`/train`}
+            href={`/rep/train`}
             className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors text-center"
           >
             Back to Scenarios
@@ -160,7 +161,7 @@ export default function FeedbackPage({ params }: { params: { scenarioId: string 
             onClick={() => {
               // Note: the easiest way to practice again is to send them back to the /train page so they hit Start Practice
               // which creates a NEW session. We don't want to reuse the completed session.
-              window.location.href = `/train`
+              window.location.href = `/rep/train`
             }}
             className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-lg shadow-indigo-500/20 transition-all text-center"
           >

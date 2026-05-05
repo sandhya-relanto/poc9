@@ -8,13 +8,13 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function RepSignupPage() {
   const router = useRouter()
-  const [name, setName]             = useState('')
-  const [email, setEmail]           = useState('')
-  const [password, setPassword]     = useState('')
-  const [inviteCode, setInviteCode] = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
-  const [success, setSuccess]       = useState('')
+  const [name, setName]         = useState('')
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [orgName, setOrgName]   = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [success, setSuccess]   = useState('')
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,7 +26,7 @@ export default function RepSignupPage() {
       const res = await fetch(`${API}/api/auth/signup/rep`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, inviteCode: inviteCode.trim().toUpperCase() }),
+        body: JSON.stringify({ name, email, password, orgName }),
       })
 
       const data = await res.json()
@@ -56,7 +56,7 @@ export default function RepSignupPage() {
 
         <h1 className="auth-title">Join your team</h1>
         <p className="auth-subtitle">
-          Sign up as a <strong style={{ color: 'var(--accent-light)' }}>Sales Rep</strong> using the invite code from your manager.
+          Sign up as a <strong style={{ color: 'var(--accent-light)' }}>Sales Rep</strong> and connect with your organization.
         </p>
 
         <form className="auth-form" onSubmit={handleSignup}>
@@ -98,15 +98,14 @@ export default function RepSignupPage() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="rep-invite">Invite Code</label>
+            <label htmlFor="rep-org">Organization Name</label>
             <input
-              id="rep-invite"
+              id="rep-org"
               type="text"
-              placeholder="e.g. X7KP2MNQ"
-              value={inviteCode}
-              onChange={e => setInviteCode(e.target.value)}
+              placeholder="e.g. Acme Corp"
+              value={orgName}
+              onChange={e => setOrgName(e.target.value)}
               required
-              style={{ letterSpacing: '3px', fontFamily: 'Courier New, monospace', textTransform: 'uppercase' }}
             />
           </div>
 

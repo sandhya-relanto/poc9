@@ -1,129 +1,126 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail]       = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
-  const [success, setSuccess]   = useState('')
+  const [role, setRole] = useState<'manager' | 'rep'>('manager')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
-    setSuccess('')
+    if (loading) return
+
+    console.log(`--- [AUTH] Initiating login attempt for: ${email} ---`)
     setLoading(true)
+    setError('')
 
     try {
       const res = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, role })
       })
 
       const data = await res.json()
 
-      if (!res.ok) {
-        setError(data.error || 'Login failed')
-        return
-      }
-
-      // Store session
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('role', data.role)
-      localStorage.setItem('orgId', data.orgId)
-      localStorage.setItem('name', data.name)
-
-      setSuccess(`Welcome back, ${data.name}! Redirecting…`)
-
-      setTimeout(() => {
+      if (res.ok) {
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('role', data.role)
+        localStorage.setItem('orgId', data.orgId)
+        
+        console.log(`--- [AUTH] Login successful. Redirecting as ${data.role}... ---`)
+        
         if (data.role === 'manager') {
           router.push('/dashboard')
         } else {
-          router.push('/my-stats')
+          router.push('/rep/dashboard')
         }
-      }, 1200)
-    } catch {
-      setError('Cannot connect to server. Is the backend running?')
+      } else {
+        console.error(`--- [AUTH] Login failed: ${data.error} ---`)
+        setError(data.error || 'Invalid credentials')
+      }
+    } catch (err) {
+      console.error('--- [AUTH] Network/Connection error ---', err)
+      setError('Connection failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
+
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        {/* Brand */}
-        <div className="auth-brand">
-          <div className="auth-brand-icon">⚡</div>
-          <span className="auth-brand-name">SalesCoach</span>
+    <div className="auth-page flex items-center justify-center min-h-screen bg-[#F6F1E8]">
+      <div className="auth-card w-full max-w-4xl bg-[#EAE2D6] border border-[#D8CCBC] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col md:flex-row">
+        
+        {/* Left Side: Branding */}
+        <div className="md:w-1/2 p-16 flex flex-col justify-center items-center md:items-start border-b md:border-b-0 md:border-r border-[#D8CCBC]/50">
+          <h1 className="text-5xl font-extrabold text-[#3A2F28] tracking-tighter leading-none mb-4">SalesCoach</h1>
+          <div className="w-12 h-1 bg-[#7D8461] rounded-full"></div>
         </div>
 
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Sign in to your account to continue coaching.</p>
-
-        <form className="auth-form" onSubmit={handleLogin}>
-          <div className="form-group">
-            <label htmlFor="login-email">Email</label>
-            <input
-              id="login-email"
-              type="email"
-              placeholder="you@company.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-
+        {/* Right Side: Authentication */}
+        <div className="md:w-1/2 p-16 flex flex-col justify-center bg-[#F6F1E8]/30 backdrop-blur-sm">
           {error && (
-            <div className="alert alert-error">
-              <span>⚠</span> {error}
+            <div className="alert p-5 bg-[#A06A5B]/10 border border-[#A06A5B]/20 rounded-2xl text-[#A06A5B] text-[12px] font-black uppercase tracking-widest mb-10 text-center">
+               {error}
             </div>
           )}
 
-          {success && (
-            <div className="alert alert-success">
-              <span>✓</span> {success}
+          <div className="role-tabs flex gap-2 mb-10 bg-[#EFE7DC] p-1.5 rounded-2xl border border-[#D8CCBC]">
+             <button 
+               onClick={() => setRole('manager')}
+               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'manager' ? 'bg-[#7D8461] text-[#F6F1E8] shadow-md' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
+             >
+               Manager
+             </button>
+             <button 
+               onClick={() => setRole('rep')}
+               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'rep' ? 'bg-[#7D8461] text-[#F6F1E8] shadow-md' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
+             >
+               Representative
+             </button>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-8">
+            <div className="space-y-3">
+              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Email Identity</label>
+              <input 
+                type="email" 
+                placeholder="name@organization.com" 
+                className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all placeholder:text-[#7B6F63]/30"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-          )}
+            <div className="space-y-3">
+              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Secret Access</label>
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all placeholder:text-[#7B6F63]/30"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
 
-          <button
-            id="login-submit"
-            type="submit"
-            className="btn-primary"
-            disabled={loading}
-          >
-            {loading ? <><span className="spinner" />Signing in…</> : 'Sign In'}
-          </button>
-        </form>
+            <button type="submit" disabled={loading} className="w-full py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-[12px] uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-[#7D8461]/20 transition-all active:scale-[0.98] mt-4">
+              {loading ? 'Verifying...' : 'Authorize Access'}
+            </button>
+          </form>
 
-        <div className="auth-divider">or</div>
-
-        <div className="auth-footer">
-          No account?{' '}
-          <Link href="/signup">Create one as Manager</Link>
-          {' · '}
-          <Link href="/signup/rep">Join as Rep</Link>
+          <div className="mt-12 text-center text-[12px] font-black uppercase tracking-widest text-[#7B6F63]">
+            New Client? <Link href="/signup" className="text-[#7D8461] hover:underline ml-2">Initialize Account</Link>
+          </div>
         </div>
       </div>
     </div>

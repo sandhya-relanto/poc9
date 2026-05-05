@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
@@ -42,11 +43,6 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         if (res.ok) {
           const data = await res.json()
           setScenario(data)
-          
-          setMessages([{
-            role: 'assistant',
-            content: `Hello, I am ${data.persona_name}. How can I help you today?`
-          }])
         }
       } catch (err) {
         console.error(err)
@@ -58,7 +54,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     if (sessionId) {
       fetchScenario()
     } else {
-      router.push('/train')
+      router.push('/rep/train')
     }
   }, [params.scenarioId, sessionId, router])
 
@@ -70,38 +66,30 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
   const handleMicClick = async () => {
     if (isRecording) {
-      // STOP recording
       mediaRecorder?.stop()
       setIsRecording(false)
     } else {
-      // START recording
       chunksRef.current = []
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        
         const recorder = new MediaRecorder(stream)
         
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            chunksRef.current.push(e.data)
-          }
+          if (e.data.size > 0) chunksRef.current.push(e.data)
         }
         
         recorder.onstop = async () => {
           stream.getTracks().forEach(t => t.stop())
           const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-          console.log('Audio blob size:', blob.size)
           await sendVoiceMessage(blob)
         }
         
         recorder.start()
         setMediaRecorder(recorder)
         setIsRecording(true)
-        console.log('Recording started')
-        
       } catch (err) {
         console.error('Microphone error:', err)
-        alert('Microphone blocked. Click the lock icon in your browser address bar and allow microphone access for localhost:3000, then refresh the page.')
+        alert('Microphone access denied. Please allow microphone access in your browser settings.')
       }
     }
   }
@@ -140,7 +128,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const speakText = (text: string) => {
     window.speechSynthesis.cancel() 
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = 0.95
+    utterance.rate = 1.0
     utterance.pitch = 1.0
     utterance.volume = 1.0
     
@@ -202,7 +190,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       })
       
       if (res.ok) {
-        router.push(`/train/${params.scenarioId}/feedback?sessionId=${sessionId}`)
+        router.push(`/rep/train/${params.scenarioId}/review?sessionId=${sessionId}`)
       } else {
         alert('Failed to end session')
         setEnding(false)
@@ -216,29 +204,36 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
   if (loading || !scenario) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-500"></div>
+      <div className="min-h-screen bg-[#F6F1E8] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#7D8461]"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col font-sans text-gray-100">
+    <div className="min-h-screen bg-[#F6F1E8] flex flex-col font-jakarta text-[#3A2F28]">
       
       {/* Top Bar */}
-      <header className="bg-gray-900 border-b border-gray-800 p-4 flex justify-between items-center shrink-0">
-        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
-          <h1 className="text-xl font-bold text-white">{scenario.persona_name}</h1>
-          <div className="flex bg-gray-800 rounded-lg p-1 ml-2">
+      <header className="bg-[#EFE7DC] border-b border-[#D8CCBC] p-6 flex justify-between items-center shrink-0 shadow-sm z-10">
+        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-8">
+          <div>
+            <h1 className="text-xl font-extrabold text-[#3A2F28] tracking-tight">
+              {scenario.customer_info?.name || scenario.persona_name}
+            </h1>
+            <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-[0.2em] mt-0.5">
+              Target: {scenario.persona_type || 'Strategic Account'}
+            </p>
+          </div>
+          <div className="flex bg-[#EAE2D6] rounded-xl p-1 border border-[#D8CCBC]">
             <button 
               onClick={() => { setIsVoiceMode(false); window.speechSynthesis.cancel(); }}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${!isVoiceMode ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!isVoiceMode ? 'bg-[#F6F1E8] text-[#7D8461] shadow-sm' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
             >
               Text Mode
             </button>
             <button 
               onClick={() => setIsVoiceMode(true)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${isVoiceMode ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isVoiceMode ? 'bg-[#F6F1E8] text-[#7D8461] shadow-sm' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
             >
               Voice Mode
             </button>
@@ -247,48 +242,50 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         <button
           onClick={handleEndSession}
           disabled={ending}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:text-red-300 text-white text-sm font-medium rounded transition-colors flex items-center gap-2"
+          className="px-6 py-3 bg-[#A06A5B] hover:bg-[#8B5C4F] disabled:opacity-50 text-[#F6F1E8] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md"
         >
-          {ending ? 'Analyzing...' : 'End Session'}
+          {ending ? 'Processing...' : 'End Mission'}
         </button>
       </header>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 md:p-12 space-y-8 custom-scrollbar">
+        <div className="max-w-4xl mx-auto space-y-10">
           {messages.map((m, idx) => (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
-                className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3 ${
+                className={`max-w-[85%] md:max-w-[70%] rounded-[2rem] px-8 py-5 text-base font-medium shadow-sm leading-relaxed ${
                   m.role === 'user'
-                    ? 'bg-indigo-600 text-white rounded-tr-sm'
-                    : 'bg-gray-800 text-gray-100 border border-gray-700 rounded-tl-sm'
+                    ? 'bg-[#7D8461] text-[#F6F1E8] rounded-tr-none'
+                    : 'bg-[#EFE7DC] text-[#3A2F28] border border-[#D8CCBC] rounded-tl-none'
                 }`}
               >
-                <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{m.content}</p>
+                <p className="whitespace-pre-wrap">{m.content}</p>
               </div>
             </div>
           ))}
 
           {(isTyping || isProcessing || isSpeaking) && (
             <div className="flex justify-start">
-              <div className="bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm px-5 py-4 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  {isProcessing && <span className="text-xs text-indigo-400 animate-pulse font-medium">Processing...</span>}
-                  {isSpeaking && <span className="text-xs text-indigo-400 animate-pulse font-medium">{scenario.persona_name} is speaking...</span>}
-                  {isTyping && <span className="text-xs text-gray-400 animate-pulse font-medium">AI Thinking...</span>}
+              <div className="bg-[#EFE7DC] border border-[#D8CCBC] text-[#3A2F28] rounded-[2rem] rounded-tl-none px-8 py-6 flex flex-col gap-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-[#7D8461] font-black uppercase tracking-[0.2em] animate-pulse">
+                    {isProcessing ? 'Intercepting Data...' : 
+                     isSpeaking ? `${scenario.customer_info?.name || 'Target'} is speaking...` : 
+                     'Analyzing Response...'}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-[#7D8461] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-2 h-2 bg-[#7D8461] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 bg-[#7D8461] rounded-full animate-bounce"></div>
                 </div>
                 {isSpeaking && (
                    <button 
                      onClick={() => window.speechSynthesis.cancel()}
-                     className="mt-2 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-gray-300 transition-colors w-fit"
+                     className="mt-2 text-[9px] font-black uppercase tracking-widest bg-[#F6F1E8] border border-[#D8CCBC] px-3 py-1.5 rounded-lg text-[#7B6F63] hover:text-[#3A2F28] transition-all w-fit"
                    >
-                     Stop Audio
+                     Mute Target
                    </button>
                 )}
               </div>
@@ -299,55 +296,52 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       </div>
 
       {/* Input Area */}
-      <div className="bg-gray-900 border-t border-gray-800 p-6 shrink-0">
-        <div className="max-w-3xl mx-auto">
+      <div className="bg-[#EAE2D6] border-t border-[#D8CCBC] p-8 shrink-0">
+        <div className="max-w-4xl mx-auto">
           {!isVoiceMode ? (
-            <form onSubmit={handleSend} className="flex gap-3 relative">
+            <form onSubmit={handleSend} className="flex gap-4 relative">
               <input
                 type="text"
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
                 disabled={isTyping || ending}
-                placeholder={isTyping ? "AI is typing..." : "Type your message..."}
-                className="flex-1 bg-gray-950 border border-gray-700 rounded-full px-6 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                placeholder={isTyping ? "Transmitting..." : "Command your next move..."}
+                className="flex-1 bg-[#F6F1E8] border border-[#D8CCBC] rounded-[1.5rem] px-8 py-5 text-[#3A2F28] placeholder-[#D8CCBC] focus:outline-none focus:ring-4 focus:ring-[#7D8461]/5 transition-all disabled:opacity-50 font-medium"
               />
               <button
                 type="submit"
                 disabled={!inputText.trim() || isTyping || ending}
-                className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded-full px-5 font-medium transition-colors"
+                className="absolute right-3 top-3 bottom-3 bg-[#7D8461] hover:bg-[#6B7252] disabled:bg-[#D6C2A8] text-[#F6F1E8] rounded-2xl px-8 text-[10px] font-black uppercase tracking-widest transition-all shadow-md"
               >
                 Send
               </button>
             </form>
           ) : (
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-6">
+              <div className="flex flex-col items-center gap-4">
                 <button
                   onClick={handleMicClick}
                   disabled={isProcessing || isSpeaking || ending}
-                  className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl transition-all ${
+                  className={`w-24 h-24 rounded-full flex items-center justify-center text-[#F6F1E8] text-4xl transition-all shadow-xl ${
                     isRecording 
-                      ? 'bg-red-500 animate-pulse scale-110' 
-                      : 'bg-blue-600 hover:bg-blue-500'
+                      ? 'bg-[#A06A5B] animate-pulse scale-110' 
+                      : 'bg-[#7D8461] hover:bg-[#6B7252]'
                   }`}
                 >
                   {isRecording ? '⏹' : '🎤'}
                 </button>
-                <p className="text-gray-400 text-sm mt-2">
-                  {isRecording ? 'Recording... tap to stop' : 'Tap to speak'}
+                <p className="text-[#7B6F63] text-[10px] font-black uppercase tracking-[0.2em] mt-2">
+                  {isRecording ? 'Recording Active' : 'Authorize Voice Command'}
                 </p>
               </div>
               
-              <div className="text-center">
+              <div className="text-center h-10">
                 {(isProcessing || isSpeaking) && (
-                  <div className="flex flex-col items-center gap-2">
-                    <p className="text-sm font-medium text-indigo-400">
-                      {isProcessing ? 'Processing...' : `${scenario.persona_name} is speaking...`}
-                    </p>
+                  <div className="flex flex-col items-center gap-3">
                     {isSpeaking && (
-                       <div className="flex justify-center items-center gap-0.5 h-4">
+                       <div className="flex justify-center items-center gap-1 h-6">
                           {[...Array(5)].map((_, i) => (
-                            <div key={i} className={`w-1 bg-indigo-500 rounded-full animate-[sound-wave_0.5s_ease-in-out_infinite]`} style={{ animationDelay: `${i * 0.1}s`, height: '100%' }}></div>
+                            <div key={i} className={`w-1.5 bg-[#7D8461] rounded-full animate-voice-wave`} style={{ animationDelay: `${i * 0.15}s` }}></div>
                           ))}
                        </div>
                     )}
@@ -360,9 +354,12 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       </div>
 
       <style jsx>{`
-        @keyframes sound-wave {
+        @keyframes voice-wave {
           0%, 100% { height: 20%; }
           50% { height: 100%; }
+        }
+        .animate-voice-wave {
+          animation: voice-wave 0.6s ease-in-out infinite;
         }
       `}</style>
     </div>

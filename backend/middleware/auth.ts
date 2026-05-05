@@ -19,7 +19,7 @@ export const authenticate = async (req, res, next) => {
   // Fetch role + org_id from our users table
   const { data: profile, error: profileError } = await supabase
     .from('users')
-    .select('id, role, org_id, name')
+    .select('id, role, org_id, name, email')
     .eq('id', user.id)
     .single()
 

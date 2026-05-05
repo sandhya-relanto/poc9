@@ -1,5 +1,7 @@
 import { supabase } from '../db/supabase'
 import Groq from 'groq-sdk'
+import { generateSystemInstruction } from '../utils/promptGenerator'
+import { generateEvaluationPrompt } from '../utils/evaluationGenerator'
 
 export const getMySessions = async (req: any, res: any) => {
   const repId = req.user.id
@@ -8,6 +10,7 @@ export const getMySessions = async (req: any, res: any) => {
     .from('training_sessions')
     .select(`
       id, 
+      scenario_id,
       completed_at, 
       feedback_json, 
       training_scenarios (
@@ -16,21 +19,27 @@ export const getMySessions = async (req: any, res: any) => {
       )
     `)
     .eq('rep_id', repId)
+    .not('completed_at', 'is', null) // Only fetch completed sessions
     .order('completed_at', { ascending: false })
-    .limit(5)
 
   if (error) {
     return res.status(500).json({ error: error.message })
   }
 
-  const formatted = data.map((session: any) => {
+  // Filter out coaching notes and assignments to keep only standard training sessions
+  const standardSessions = data.filter((s: any) => 
+    s.feedback_json && !s.feedback_json.is_note && !s.feedback_json.is_assignment
+  )
+
+  const formatted = standardSessions.map((session: any) => {
     const scenario = session.training_scenarios
     const scenarioName = scenario 
       ? `${scenario.persona_name} (${scenario.persona_type})` 
-      : 'Unknown Scenario'
+      : 'Practice Session'
 
     return {
       id: session.id,
+      scenario_id: session.scenario_id,
       scenario_name: scenarioName,
       completed_at: session.completed_at,
       feedback_json: session.feedback_json
@@ -40,13 +49,10 @@ export const getMySessions = async (req: any, res: any) => {
   res.json(formatted)
 }
 
-export const startSession = async (req: any, res: any) => {
-  const repId = req.user.id
-  const { scenarioId } = req.body
 
-  if (!scenarioId) {
-    return res.status(400).json({ error: 'scenarioId is required' })
-  }
+export const startPractice = async (req: any, res: any) => {
+  const { scenarioId, assignmentId } = req.body
+  const repId = req.user.id
 
   const { data, error } = await supabase
     .from('training_sessions')
@@ -60,6 +66,19 @@ export const startSession = async (req: any, res: any) => {
 
   if (error) {
     return res.status(500).json({ error: error.message })
+  }
+
+  // If this session was started from an assignment, update the assignment tracker
+  if (assignmentId) {
+    console.log(`Linking session ${data.id} to assignment ${assignmentId}`);
+    await supabase
+      .from('training_assignments')
+      .update({ 
+        session_id: data.id,
+        status: 'In Progress'
+      })
+      .eq('id', assignmentId)
+      .eq('rep_id', repId)
   }
 
   res.json({ sessionId: data.id })
@@ -83,12 +102,15 @@ export const sendMessage = async (req: any, res: any) => {
     
     const scenario = session.training_scenarios
     
-    const systemInstruction = `You are ${scenario.persona_name}, a ${scenario.persona_type}.
-Context: ${scenario.context_text}.
-Difficulty: ${scenario.difficulty}.
-You are in a sales call with a rep. Stay in character always.
-Keep responses to 2-4 sentences maximum.
-${scenario.difficulty === 'beginner' ? 'beginner: friendly and easy' : scenario.difficulty === 'intermediate' ? 'intermediate: neutral with some pushback' : 'advanced: skeptical, challenge everything, hard objections'}`
+    // Extract scenario name from context_text (e.g. "[SCENARIO: Product Demo Call] ...")
+    const match = scenario.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
+    const extractedScenarioName = match ? match[1] : scenario.persona_type
+    
+    const systemInstruction = generateSystemInstruction(
+      scenario.persona_name,
+      extractedScenarioName,
+      scenario.difficulty
+    )
 
     const history = session.messages_json || []
     
@@ -169,12 +191,15 @@ export const sendVoiceMessage = async (req: any, res: any) => {
     if (sessionErr || !session) throw new Error('Session not found')
     
     const scenario = session.training_scenarios
-    const systemInstruction = `You are ${scenario.persona_name}, a ${scenario.persona_type}.
-Context: ${scenario.context_text}.
-Difficulty: ${scenario.difficulty}.
-You are in a sales call with a rep. Stay in character always.
-Keep responses to 2-4 sentences maximum.
-${scenario.difficulty === 'beginner' ? 'beginner: friendly and easy' : scenario.difficulty === 'intermediate' ? 'intermediate: neutral with some pushback' : 'advanced: skeptical, challenge everything, hard objections'}`
+    
+    const match = scenario.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
+    const extractedScenarioName = match ? match[1] : scenario.persona_type
+
+    const systemInstruction = generateSystemInstruction(
+      scenario.persona_name,
+      extractedScenarioName,
+      scenario.difficulty
+    )
 
     const history = session.messages_json || []
     const normalizedHistory = history.map((m: any) => {
@@ -238,6 +263,12 @@ export const endSession = async (req: any, res: any) => {
       return `${role}: ${content}`
     }).join('\n')
     
+    const scenario = session.training_scenarios
+    const match = scenario?.context_text?.match(/\[SCENARIO:\s*(.*?)\]/)
+    const scenarioName = match ? match[1] : (scenario?.persona_type || 'Unknown')
+
+    const prompt = generateEvaluationPrompt(scenarioName, transcript)
+    
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
     
     const completion = await groq.chat.completions.create({
@@ -245,26 +276,11 @@ export const endSession = async (req: any, res: any) => {
       messages: [
         { 
           role: 'system', 
-          content: 'You are a sales coach analyst. Return only raw JSON, no markdown, no backticks.' 
+          content: 'You are an expert sales coach analyst. Return only raw JSON, no markdown, no backticks.' 
         },
         { 
           role: 'user', 
-          content: `Analyse this sales conversation transcript and return ONLY this JSON object:
-      {
-        "scores": {
-          "opening": number between 1-5,
-          "discovery": number between 1-5,
-          "objection_handling": number between 1-5,
-          "talk_ratio": number between 1-5,
-          "closing": number between 1-5
-        },
-        "strengths": ["strength 1", "strength 2", "strength 3"],
-        "improvements": ["improvement 1", "improvement 2", "improvement 3"],
-        "overall_score": number between 0-100
-      }
-      
-      Transcript:
-      ${transcript}`
+          content: prompt
         }
       ],
       max_tokens: 1000,
@@ -287,6 +303,25 @@ export const endSession = async (req: any, res: any) => {
         completed_at: new Date().toISOString()
       })
       .eq('id', sessionId)
+
+    // Assignment Lifecycle: Mark linked assignment as Completed
+    const { data: assignment } = await supabase
+      .from('training_assignments')
+      .select('id')
+      .eq('session_id', sessionId)
+      .single()
+
+    if (assignment) {
+      console.log(`Closing assignment ${assignment.id} for session ${sessionId}`);
+      await supabase
+        .from('training_assignments')
+        .update({
+          status: 'Completed',
+          completed_at: new Date().toISOString(),
+          completed_score: score
+        })
+        .eq('id', assignment.id)
+    }
       
     return res.json(feedback)
   } catch (err: any) {
