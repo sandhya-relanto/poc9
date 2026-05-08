@@ -3,7 +3,7 @@
 import GlobalSidebar from '@/components/GlobalSidebar'
 import GlobalTopbar from '@/components/GlobalTopbar'
 
-export default function RepLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode
@@ -21,7 +21,7 @@ export default function RepLayout({
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="space-y-1 text-center md:text-left">
               <p className="text-sm font-bold text-[#3E342B] tracking-tight italic uppercase">SalesCoach Intelligence</p>
-              <p className="text-[10px] text-[#82786F] font-bold uppercase tracking-widest">Representative Training Tier</p>
+              <p className="text-[10px] text-[#82786F] font-bold uppercase tracking-widest">Root Administrative Layer</p>
             </div>
             <div className="text-[10px] font-bold text-[#82786F] uppercase tracking-widest">
               &copy; 2026 SalesCoach AI. v2.1.0-ENTERPRISE

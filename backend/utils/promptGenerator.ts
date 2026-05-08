@@ -6,8 +6,11 @@ const personasPath = path.join(__dirname, '../data/personas.json')
 const scenariosPath = path.join(__dirname, '../data/scenarios.json')
 const objectionsPath = path.join(__dirname, '../data/objections.json')
 
-export function generateSystemInstruction(scenario: any): string {
+export function generateSystemInstruction(scenario: any, turnMetrics?: any, priorMessages: string[] = []): string {
   let basePrompt = "";
+
+  // Turn-based stats for realism
+  const { wordCount = 0, questionCount = 0, consecutiveDismissive = 0 } = turnMetrics || {};
 
   // 1. Direct Override (Highest Priority)
   if (scenario.custom_prompt && scenario.custom_prompt.trim() !== '') {
@@ -81,8 +84,31 @@ ${difficultyModifier}`;
     }
   }
 
-  // ALWAYS append these strict rules regardless of where the prompt came from
+  // Inject real-time conversation awareness
+  const realismContext = `
+--- REAL-TIME CONVERSATION STATS ---
+- Rep Word Count (latest turn): ${wordCount}
+- Rep Question Count (latest turn): ${questionCount}
+- Consecutive Dismissive turns: ${consecutiveDismissive}
+
+--- BEHAVIORAL HARD RULES ---
+1. DEAL TEMPERATURE: You MUST NOT set "temp" to "Hot" unless the rep asked at least 1 question AND spoke at least 30 words in their latest turn. If they are lazy, the temp remains Cold or Warm.
+2. MOOD DROPS: If the rep has been dismissive for 2 consecutive turns (consecutiveDismissive >= 2), your "mood" MUST drop to "Skeptical" or "Evaluating", regardless of previous state.
+3. REALISM: If the rep is rude, lazy, or gives one-word answers, be annoyed or skeptical. Do not stay "happy" or "interested" automatically.
+`;
+
+  const antiRepetition = `
+--- ANTI-REPETITION RULES ---
+1. DO NOT REPEAT phrases or sentences you have already used.
+2. PRIOR RESPONSES (DO NOT REPEAT THESE):
+${priorMessages.map(m => ` - "${m}"`).join('\n')}
+3. BANNED WORDS: Do not use the word "certainly". Do not use "thank you" more than once in the entire session.
+4. VARIETY: Do not start consecutive sentences with "I".
+`;
+
   return `${basePrompt}
+${realismContext}
+${antiRepetition}
 
 --- STRICT CONVERSATIONAL RULES (MUST FOLLOW) ---
 1. You are acting as a real person in a live, spoken conversation. DO NOT break character. DO NOT act like an AI assistant.
@@ -90,5 +116,10 @@ ${difficultyModifier}`;
 3. Be highly conversational, natural, and human-like.
 4. Respond ONLY to the latest user input. Do not repeat previous points unless explicitly asked.
 5. Reveal information GRADUALLY. Do not give away all your details or pain points at once. Make the sales rep work for it by asking good questions.
-6. Match your response length to the user's input length (e.g., if they ask a quick question, give a quick answer).`;
+6. Match your response length to the user's input length (e.g., if they ask a quick question, give a quick answer).
+7. MANDATORY METADATA: At the VERY END of every response, you MUST include a single hidden JSON block on its own line containing real-time intelligence.
+   Format: [INTEL: {"mood": "Interested|Evaluating|Skeptical|Ready to Close", "temp": "Cold|Warm|Hot", "tip": "Short coaching tip", "mistake": "Short mistake alert or null"}]
+   Example Tip: "Ask about their current budget now"
+   Example Mistake: "You are talking too much"
+`;
 }

@@ -62,6 +62,13 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
     if (s >= 50) return { label: 'Needs Improvement', color: 'text-[#3A2F28]', bg: 'bg-[#D6C2A8]/20' }
     return { label: 'Focus Area', color: 'text-[#A06A5B]', bg: 'bg-[#A06A5B]/10' }
   }
+  
+  const displayScore = (val: number | null | undefined) => {
+    const safeVal = val ?? 0
+    const raw = (safeVal / 100) * 5
+    return `${raw.toFixed(1)}/5 (${safeVal}%)`
+  }
+  
   const outcome = getOutcome(score)
 
   return (
@@ -99,7 +106,7 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
           <div className="flex items-center gap-8 bg-[#F6F1E8] p-8 rounded-[2rem] border border-[#D8CCBC] shadow-inner">
             <div className="text-center">
               <div className={`text-6xl font-black ${outcome.color} tracking-tighter`}>
-                {score}%
+                {displayScore(score)}
               </div>
               <div className="text-[10px] font-black uppercase tracking-widest text-[#7B6F63] mt-2">Overall Proficiency</div>
             </div>
@@ -135,86 +142,143 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
       {/* Tab Content */}
       <div className="space-y-12">
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-            <div className="lg:col-span-2 space-y-12">
-              <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 space-y-6 shadow-sm">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Operational Summary</h3>
-                <p className="text-[#3A2F28] text-lg leading-relaxed font-medium italic">
-                  "{feedback.summary || "No detailed summary available for this session."}"
-                </p>
-                <div className="pt-8 border-t border-[#D8CCBC]/50">
-                   <h4 className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest mb-4">Strategic Assessment</h4>
-                   <p className="text-base text-[#7B6F63] leading-relaxed">
-                     {feedback.outcome_analysis || "The interaction provided critical baseline data. Focus on recommended vectors to optimize future sessions."}
-                   </p>
-                </div>
-              </section>
-
-              <section className="space-y-6">
-                <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em] px-4">Tactical Highlights</h3>
-                <div className="grid grid-cols-1 gap-6">
-                  {feedback.highlights?.map((h: any, i: number) => (
-                    <div key={i} className={`p-10 rounded-[2.5rem] border ${
-                      h.type === 'strong' 
-                        ? 'bg-[#7D8461]/5 border-[#7D8461]/20' 
-                        : 'bg-[#A06A5B]/5 border-[#A06A5B]/20'
-                    }`}>
-                      <div className="flex justify-between items-start mb-6">
-                        <span className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-full border ${
-                          h.type === 'strong' ? 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20' : 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20'
-                        }`}>
-                          {h.type === 'strong' ? 'Strategic Excellence' : 'Optimization Vector'}
+          <div className="space-y-12">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+              <div className="lg:col-span-2 space-y-12">
+                {/* 1. Overall Score Hero */}
+                <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 shadow-sm">
+                  <div className="flex items-center gap-8 bg-[#F6F1E8] p-8 rounded-[2rem] border border-[#D8CCBC] shadow-inner">
+                    <div className="text-center">
+                      <div className={`text-6xl font-black ${outcome.color} tracking-tighter`}>
+                        {displayScore(score)}
+                      </div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-[#7B6F63] mt-2">Overall Proficiency</div>
+                    </div>
+                    <div className="h-16 w-px bg-[#D8CCBC]"></div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${outcome.bg} ${outcome.color}`}>
+                          {outcome.label}
                         </span>
                       </div>
-                      <p className="text-[#3A2F28] italic text-xl font-bold mb-6">“{h.rep_quote}”</p>
-                      <p className="text-[#7B6F63] text-base mb-6 leading-relaxed">{h.context}</p>
-                      {h.suggestion && (
-                        <div className="bg-[#F6F1E8] p-6 rounded-2xl border border-[#D8CCBC]">
-                          <p className="text-[9px] text-[#7D8461] font-black uppercase tracking-widest mb-2">Recommended Revision:</p>
-                          <p className="text-[#3A2F28] text-base italic">“{h.suggestion}”</p>
-                        </div>
-                      )}
+                      <p className="text-[#3A2F28] font-medium leading-relaxed">
+                        {feedback.summary || "Awaiting final analysis results..."}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {/* 2. Objective Metrics Table */}
+                <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 shadow-sm space-y-6">
+                  <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Objective Performance Data</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    {[
+                      { label: 'Talk Ratio', val: feedback.metrics?.talk_ratio || 'Insufficient Data', icon: '🗣️' },
+                      { label: 'Question Rate', val: feedback.metrics?.question_rate || 'Insufficient Data', icon: '❓' },
+                      { label: 'Avg Length', val: feedback.metrics?.avg_response_length ? `${feedback.metrics.avg_response_length}` : 'Insufficient Data', icon: '📏' },
+                      { label: 'Energy Level', val: feedback.scores?.energy ? `${feedback.scores.energy}%` : 'Insufficient Data', icon: '⚡' }
+                    ].map(m => (
+                      <div key={m.label} className="bg-[#F6F1E8] p-6 rounded-2xl border border-[#D8CCBC]/50 flex flex-col items-center text-center">
+                        <span className="text-xl mb-2">{m.icon}</span>
+                        <p className="text-[8px] font-black text-[#7B6F63] uppercase tracking-tighter mb-1">{m.label}</p>
+                        <p className="text-sm font-bold text-[#3A2F28]">{m.val}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* 3. AI Coaching Cards Grid */}
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {[
+                    { title: 'Opening Effectiveness', score: feedback.scores?.opening, tip: feedback.detailed_insights?.opening_tip || 'Refine your agenda setting strategy.' },
+                    { title: 'Discovery Quality', score: feedback.scores?.discovery, tip: feedback.detailed_insights?.discovery_tip || 'Practice more open-ended strategic questioning.' },
+                    { title: 'Objection Handling', score: feedback.scores?.objection_handling, tip: feedback.detailed_insights?.objection_tip || 'Strengthen your ROI-backed proof points.' },
+                    { title: 'Closing Strength', score: feedback.scores?.closing, tip: feedback.detailed_insights?.closing_tip || 'Ensure every call ends with a firm next step.' }
+                  ].map(card => (
+                    <div key={card.title} className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] p-8 space-y-4 shadow-sm">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-widest">{card.title}</h4>
+                        <span className="text-lg font-black text-[#7D8461]">{card.score ?? 0}%</span>
+                      </div>
+                      <div className="w-full bg-[#EAE2D6] h-1.5 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#7D8461]" style={{ width: `${card.score ?? 0}%` }} />
+                      </div>
+                      <p className="text-[9px] text-[#7B6F63] font-medium leading-relaxed italic">Coach Directive: {card.tip}</p>
                     </div>
                   ))}
-                </div>
-              </section>
-            </div>
+                </section>
 
-            <div className="space-y-12">
-              <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 space-y-10 shadow-sm">
-                <div>
-                  <h4 className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest mb-6">Tactical Strengths</h4>
-                  <ul className="space-y-4">
-                    {feedback.strengths?.map((s: string, i: number) => (
-                      <li key={i} className="flex gap-4 text-sm text-[#3A2F28] font-bold uppercase tracking-tight items-start">
-                        <span className="text-[#7D8461]">✓</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="pt-10 border-t border-[#D8CCBC]/50">
-                  <h4 className="text-[9px] font-black text-[#A06A5B] uppercase tracking-widest mb-6">Optimization Focus</h4>
-                  <ul className="space-y-4">
-                    {feedback.improvements?.map((s: string, i: number) => (
-                      <li key={i} className="flex gap-4 text-sm text-[#3A2F28] font-bold uppercase tracking-tight items-start">
-                        <span className="text-[#A06A5B]">!</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
+                {/* 4-10 Detailed Insights */}
+                <div className="space-y-6">
+                  <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em] px-4">Detailed Performance Audit</h3>
+                  
+                  <InsightCard title="What Went Well" content={feedback.detailed_insights?.what_went_well} icon="✅" color="text-[#7D8461]" />
+                  <InsightCard title="Critical Mistakes" content={feedback.detailed_insights?.critical_mistakes} icon="⚠️" color="text-[#A06A5B]" alert />
+                  <InsightCard title="Missed Opportunities" content={feedback.detailed_insights?.missed_opportunities} icon="🔍" color="text-[#D6C2A8]" />
+                  <InsightCard title="Suggested Better Responses" content={feedback.detailed_insights?.suggested_responses} icon="✍️" />
+                  <InsightCard title="Persona Reaction Analysis" content={feedback.detailed_insights?.customer_reaction_analysis} icon="👤" />
+
+                  {/* 9. Readiness Level */}
+                  <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[1.5rem] p-6 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <span className="text-xl">🎓</span>
+                      <div>
+                        <h4 className="text-[9px] font-black text-[#3A2F28] uppercase tracking-widest">Market Readiness Level</h4>
+                        <p className="text-sm text-[#7B6F63] font-medium">Current competency for this persona type</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-black text-[#3A2F28]">{score >= 80 ? 'Certified' : 'In Training'}</p>
+                      <p className="text-[8px] font-black text-[#7D8461] uppercase tracking-widest">{score >= 80 ? 'High Proficiency' : 'Needs Optimization'}</p>
+                    </div>
+                  </div>
+
+                  {/* 10. Next Coaching Priority */}
+                  <div className="bg-[#3A2F28] text-[#F6F1E8] rounded-[2rem] p-10 space-y-4 shadow-xl">
+                    <div className="flex items-center gap-4">
+                      <span className="text-2xl">🎯</span>
+                      <h4 className="text-xs font-black uppercase tracking-[0.3em]">Immediate Coaching Priority</h4>
+                    </div>
+                    <p className="text-lg font-medium leading-relaxed italic">
+                      "{feedback.next_practice_recommendation || "Maintain current training frequency and focus on discovery depth."}"
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-[#7D8461] rounded-[2.5rem] p-10 shadow-lg shadow-[#7D8461]/20">
-                <h4 className="text-[#F6F1E8]/70 text-[9px] font-black uppercase tracking-widest mb-4">Recommended Module</h4>
-                <p className="text-[#F6F1E8] font-bold text-2xl mb-8 tracking-tight leading-tight">{feedback.next_practice_recommendation || "Strategic Closing Dynamics"}</p>
-                <Link 
-                  href="/rep/train"
-                  className="block w-full py-5 bg-[#F6F1E8] text-[#7D8461] text-center font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-[#EAE2D6] transition-all"
-                >
-                  Authorize Mission →
-                </Link>
+              <div className="space-y-12">
+                <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 space-y-10 shadow-sm">
+                  <div>
+                    <h4 className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest mb-6">Tactical Strengths</h4>
+                    <ul className="space-y-4">
+                      {(feedback.strengths || []).map((s: string, i: number) => (
+                        <li key={i} className="flex gap-4 text-sm text-[#3A2F28] font-bold uppercase tracking-tight items-start">
+                          <span className="text-[#7D8461]">✓</span>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="pt-10 border-t border-[#D8CCBC]/50">
+                    <h4 className="text-[9px] font-black text-[#A06A5B] uppercase tracking-widest mb-6">Optimization Focus</h4>
+                    <ul className="space-y-4">
+                      {(feedback.improvements || []).map((s: string, i: number) => (
+                        <li key={i} className="flex gap-4 text-sm text-[#3A2F28] font-bold uppercase tracking-tight items-start">
+                          <span className="text-[#A06A5B]">!</span>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="bg-[#7D8461] rounded-[2.5rem] p-10 shadow-lg shadow-[#7D8461]/20">
+                  <h4 className="text-[#F6F1E8]/70 text-[9px] font-black uppercase tracking-widest mb-4">Recommended Module</h4>
+                  <p className="text-[#F6F1E8] font-bold text-2xl mb-8 tracking-tight leading-tight">{feedback.next_practice_recommendation || "Strategic Closing Dynamics"}</p>
+                  <Link href="/rep/train" className="block w-full py-5 bg-[#F6F1E8] text-[#7D8461] text-center font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-[#EAE2D6] transition-all">
+                    Authorize Mission →
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -340,6 +404,22 @@ export default function SessionReviewPage({ params }: { params: { scenarioId: st
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function InsightCard({ title, content, icon, color = 'text-[#3A2F28]', alert = false }: any) {
+  if (!content || content === 'null' || content === 'undefined') return null
+  
+  return (
+    <div className={`bg-[#F6F1E8] border border-[#D8CCBC]/50 rounded-[1.5rem] p-6 shadow-sm transition-all hover:shadow-md ${alert ? 'border-[#A06A5B]/30' : ''}`}>
+       <div className="flex items-center gap-3 mb-3">
+          <span className="text-lg">{icon}</span>
+          <h4 className={`text-[9px] font-black uppercase tracking-widest ${color}`}>{title}</h4>
+       </div>
+       <p className="text-sm text-[#3A2F28] leading-relaxed font-medium">
+          {content}
+       </p>
     </div>
   )
 }

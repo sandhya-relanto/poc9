@@ -7,7 +7,6 @@ import { useState } from 'react'
 const NAV_ITEMS = [
   { name: 'Dashboard', href: '/rep/dashboard' },
   { name: 'My Training', href: '/rep/train' },
-  { name: 'Performance', href: '/rep/my-stats' },
   { name: 'Coaching Notes', href: '/rep/coaching' },
   { name: 'Intelligence Reports', href: '/rep/reports' },
   { name: 'Settings', href: '/rep/settings' },

@@ -10,23 +10,23 @@ export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'manager' | 'rep'>('manager')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [infoMessage, setInfoMessage] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loading) return
 
-    console.log(`--- [AUTH] Initiating login attempt for: ${email} ---`)
     setLoading(true)
     setError('')
+    setInfoMessage('')
 
     try {
       const res = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role })
+        body: JSON.stringify({ email, password })
       })
 
       const data = await res.json()
@@ -34,27 +34,22 @@ export default function LoginPage() {
       if (res.ok) {
         localStorage.setItem('token', data.token)
         localStorage.setItem('role', data.role)
-        localStorage.setItem('orgId', data.orgId)
-        
-        console.log(`--- [AUTH] Login successful. Redirecting as ${data.role}... ---`)
-        
-        if (data.role === 'manager') {
-          router.push('/dashboard')
-        } else {
-          router.push('/rep/dashboard')
-        }
+        localStorage.setItem('name', data.name)
+        localStorage.setItem('orgId', data.orgId || '')
+        router.push(data.redirectTo)
       } else {
-        console.error(`--- [AUTH] Login failed: ${data.error} ---`)
-        setError(data.error || 'Invalid credentials')
+        if (res.status === 403) {
+          setInfoMessage(data.error || 'Your account is awaiting approval.')
+        } else {
+          setError(data.error || 'Invalid credentials')
+        }
       }
     } catch (err) {
-      console.error('--- [AUTH] Network/Connection error ---', err)
       setError('Connection failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
-
 
   return (
     <div className="auth-page flex items-center justify-center min-h-screen bg-[#F6F1E8]">
@@ -62,39 +57,38 @@ export default function LoginPage() {
         
         {/* Left Side: Branding */}
         <div className="md:w-1/2 p-16 flex flex-col justify-center items-center md:items-start border-b md:border-b-0 md:border-r border-[#D8CCBC]/50">
-          <h1 className="text-5xl font-extrabold text-[#3A2F28] tracking-tighter leading-none mb-4">SalesCoach</h1>
+          <h1 className="text-5xl font-extrabold text-[#3A2F28] tracking-tighter leading-none mb-4">SALESCOACH</h1>
           <div className="w-12 h-1 bg-[#7D8461] rounded-full"></div>
+          <p className="mt-8 text-[10px] font-black uppercase tracking-[0.3em] text-[#7B6F63] text-center md:text-left">
+             Enterprise AI Performance Hub
+          </p>
         </div>
 
         {/* Right Side: Authentication */}
         <div className="md:w-1/2 p-16 flex flex-col justify-center bg-[#F6F1E8]/30 backdrop-blur-sm">
+          <div className="mb-10 text-center md:text-left">
+            <h2 className="text-3xl font-extrabold text-[#3A2F28] tracking-tight">Welcome back</h2>
+            <p className="text-sm text-[#7B6F63] mt-2 font-medium">Sign in to continue your coaching workflow</p>
+          </div>
+
           {error && (
-            <div className="alert p-5 bg-[#A06A5B]/10 border border-[#A06A5B]/20 rounded-2xl text-[#A06A5B] text-[12px] font-black uppercase tracking-widest mb-10 text-center">
+            <div className="p-5 bg-[#A06A5B]/10 border border-[#A06A5B]/20 rounded-2xl text-[#A06A5B] text-[12px] font-black uppercase tracking-widest mb-10 text-center">
                {error}
             </div>
           )}
 
-          <div className="role-tabs flex gap-2 mb-10 bg-[#EFE7DC] p-1.5 rounded-2xl border border-[#D8CCBC]">
-             <button 
-               onClick={() => setRole('manager')}
-               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'manager' ? 'bg-[#7D8461] text-[#F6F1E8] shadow-md' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
-             >
-               Manager
-             </button>
-             <button 
-               onClick={() => setRole('rep')}
-               className={`flex-1 py-3 text-[11px] font-black uppercase tracking-[0.2em] rounded-xl transition-all ${role === 'rep' ? 'bg-[#7D8461] text-[#F6F1E8] shadow-md' : 'text-[#7B6F63] hover:text-[#3A2F28]'}`}
-             >
-               Representative
-             </button>
-          </div>
+          {infoMessage && (
+            <div className="p-5 bg-[#7D8461]/10 border border-[#7D8461]/20 rounded-2xl text-[#7D8461] text-[12px] font-black uppercase tracking-widest mb-10 text-center">
+               {infoMessage}
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-8">
             <div className="space-y-3">
-              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Email Identity</label>
+              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Email</label>
               <input 
                 type="email" 
-                placeholder="name@organization.com" 
+                placeholder="name@company.com" 
                 className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all placeholder:text-[#7B6F63]/30"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -102,7 +96,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Secret Access</label>
+              <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Password</label>
               <input 
                 type="password" 
                 placeholder="••••••••" 
@@ -118,8 +112,9 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-12 text-center text-[12px] font-black uppercase tracking-widest text-[#7B6F63]">
-            New Client? <Link href="/signup" className="text-[#7D8461] hover:underline ml-2">Initialize Account</Link>
+          <div className="mt-12 flex flex-col gap-4 text-center text-[11px] font-black uppercase tracking-widest text-[#7B6F63]">
+            <Link href="/signup/manager" className="text-[#7D8461] hover:underline">Request manager access →</Link>
+            <Link href="/signup/rep" className="text-[#7D8461] hover:underline">Join as a rep →</Link>
           </div>
         </div>
       </div>

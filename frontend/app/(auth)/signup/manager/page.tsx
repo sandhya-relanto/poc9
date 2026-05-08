@@ -2,17 +2,14 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export default function ManagerSignupPage() {
-  const router = useRouter()
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [company, setCompany]   = useState('')
-  const [teamSize, setTeamSize] = useState('')
+  const [orgName, setOrgName]   = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [success, setSuccess]   = useState(false)
@@ -26,7 +23,7 @@ export default function ManagerSignupPage() {
       const res = await fetch(`${API}/api/auth/signup/manager`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, company, teamSize }),
+        body: JSON.stringify({ name, email, password, orgName }),
       })
 
       const data = await res.json()
@@ -38,7 +35,7 @@ export default function ManagerSignupPage() {
 
       setSuccess(true)
     } catch {
-      setError('Cannot connect to server. Is the backend running?')
+      setError('Connection failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -46,24 +43,22 @@ export default function ManagerSignupPage() {
 
   if (success) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#F6F1E8] p-8 text-center">
-        <div className="w-full max-w-2xl bg-[#EAE2D6] border border-[#D8CCBC] rounded-[3rem] p-16 shadow-2xl space-y-8">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight">Request Submitted</h1>
-            <div className="w-12 h-1 bg-[#7D8461] rounded-full mx-auto"></div>
+      <div className="flex items-center justify-center min-h-screen bg-[#F6F1E8] p-8">
+        <div className="w-full max-w-2xl bg-[#EAE2D6] border border-[#D8CCBC] rounded-[3rem] p-16 shadow-2xl text-center space-y-10">
+          <div className="space-y-4">
+             <div className="text-6xl mb-6">✓</div>
+             <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight">Request Submitted</h1>
+             <div className="w-12 h-1 bg-[#7D8461] rounded-full mx-auto"></div>
           </div>
           
-          <div className="space-y-4">
-            <p className="text-lg text-[#3A2F28] font-bold">Thank you, {name}.</p>
-            <p className="text-sm text-[#7B6F63] leading-relaxed">
-              Your manager account request has been submitted for admin approval.<br />
-              You will receive an email once your access has been authorized.
-            </p>
-          </div>
+          <p className="text-[#7B6F63] text-lg font-medium leading-relaxed max-w-md mx-auto">
+             Your manager access request has been submitted for admin review. 
+             You will be able to sign in once your account is approved.
+          </p>
 
           <div className="pt-8">
             <Link href="/login" className="inline-block px-12 py-4 bg-[#7D8461] text-[#F6F1E8] text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-xl transition-all hover:bg-[#6B7252]">
-              Back to Login
+              Back to Sign In
             </Link>
           </div>
         </div>
@@ -76,11 +71,9 @@ export default function ManagerSignupPage() {
       <div className="w-full max-w-4xl bg-[#EAE2D6] border border-[#D8CCBC] rounded-[3rem] shadow-2xl overflow-hidden">
         
         <div className="p-12 pb-6 text-center border-b border-[#D8CCBC]/30">
-          <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#7D8461] mb-6">SalesCoach</h2>
+          <h2 className="text-[12px] font-black uppercase tracking-[0.4em] text-[#7D8461] mb-6">SALESCOACH</h2>
           <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight mb-3">Request Manager Access</h1>
-          <p className="text-[#7B6F63] text-base font-medium max-w-lg mx-auto">
-            Join the leadership tier and start managing your team's performance.
-          </p>
+          <p className="text-[#7B6F63] text-base font-medium">Create your coaching organisation</p>
         </div>
 
         <div className="p-16 pt-12">
@@ -90,8 +83,8 @@ export default function ManagerSignupPage() {
             </div>
           )}
 
-          <form onSubmit={handleSignup} className="space-y-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <form onSubmit={handleSignup} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-3">
                 <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Full Name</label>
                 <input 
@@ -130,45 +123,29 @@ export default function ManagerSignupPage() {
               </div>
 
               <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Company Name</label>
+                <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Organisation Name</label>
                 <input 
                   type="text" 
                   placeholder="Acme Corp" 
                   className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all placeholder:text-[#7B6F63]/30"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
                   required
                 />
               </div>
-
-              <div className="space-y-3 md:col-span-2">
-                <label className="text-[11px] font-black uppercase text-[#7B6F63] tracking-[0.3em] ml-1">Team Size</label>
-                <select 
-                  className="w-full bg-[#F3EEE6] border border-[#D8CCBC] rounded-2xl py-3.5 px-6 text-base font-bold text-[#3A2F28] focus:border-[#7D8461] outline-none transition-all"
-                  value={teamSize}
-                  onChange={(e) => setTeamSize(e.target.value)}
-                  required
-                >
-                   <option value="">Select range...</option>
-                   <option value="1-10">1-10 representatives</option>
-                   <option value="11-50">11-50 representatives</option>
-                   <option value="51-200">51-200 representatives</option>
-                   <option value="201+">201+ representatives</option>
-                </select>
-              </div>
             </div>
 
-            <div className="flex flex-col items-center gap-8 pt-4">
+            <div className="flex flex-col items-center gap-8 pt-6">
               <button 
                 type="submit" 
                 disabled={loading} 
                 className="px-16 py-5 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] font-black text-[12px] uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-[#7D8461]/20 transition-all active:scale-[0.98]"
               >
-                {loading ? 'Submitting Request...' : 'Request Manager Access'}
+                {loading ? 'Submitting...' : 'Submit Request'}
               </button>
 
               <div className="text-[12px] font-black uppercase tracking-widest text-[#7B6F63]">
-                Already registered? <Link href="/login" className="text-[#7D8461] hover:underline ml-1">Sign In</Link>
+                Already have an account? <Link href="/login" className="text-[#7D8461] hover:underline ml-1">Sign In</Link>
               </div>
             </div>
           </form>
