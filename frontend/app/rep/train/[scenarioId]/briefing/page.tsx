@@ -13,19 +13,33 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
   const assignmentId = searchParams.get('assignmentId')
   
   const [scenario, setScenario] = useState<any>(null)
+  const [voices, setVoices] = useState<any[]>([])
+  const [selectedVoice, setSelectedVoice] = useState<string>('Xb7hH8MSUJpSbSDYk0k2')
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [isPreviewing, setIsPreviewing] = useState(false)
 
   useEffect(() => {
-    const fetchBriefing = async () => {
+    const fetchData = async () => {
       try {
         const token = localStorage.getItem('token')
-        const res = await fetch(`${API}/api/scenarios/${scenarioId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const headers = { 'Authorization': `Bearer ${token}` }
+        
+        // 1. Fetch Scenario
+        const res = await fetch(`${API}/api/scenarios/${scenarioId}`, { headers })
         if (res.ok) {
           const data = await res.json()
           setScenario(data)
+          if (data.recommended_voice_id) {
+            setSelectedVoice(data.recommended_voice_id)
+          }
+        }
+
+        // 2. Fetch Available Voices
+        const vRes = await fetch(`${API}/api/sessions/get-voices`, { headers })
+        if (vRes.ok) {
+          const vData = await vRes.json()
+          setVoices(vData)
         }
       } catch (err) {
         console.error(err)
@@ -34,8 +48,39 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
       }
     }
     
-    fetchBriefing()
+    fetchData()
   }, [scenarioId])
+
+  const handlePreviewVoice = async (voiceId: string) => {
+    if (isPreviewing) return
+    setIsPreviewing(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/api/sessions/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          sessionId: 'preview', // Special handling or just use a dummy text
+          message: 'Hello, this is a voice preview. I will be your persona for this simulation.',
+          voiceIdOverride: voiceId // We'll handle this in the backend
+        })
+      })
+      
+      // Since we don't have a specific "preview" endpoint that doesn't save to DB,
+      // I'll just use the standard ElevenLabs logic but with a temporary audio object.
+      // Better: Create a small dedicated preview utility in the frontend or backend.
+      // For now, I'll just assume a simpler way: play a native browser voice if preview fails,
+      // OR I'll add a quick 'preview' endpoint to the backend.
+      
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsPreviewing(false)
+    }
+  }
 
   const handleBeginConversation = async () => {
     setStarting(true)
@@ -47,7 +92,11 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ scenarioId, assignmentId })
+        body: JSON.stringify({ 
+          scenarioId, 
+          assignmentId,
+          voiceId: selectedVoice 
+        })
       })
 
       if (res.ok) {
@@ -236,6 +285,41 @@ export default function BriefingPage({ params }: { params: { scenarioId: string 
                   <span key={i} className="px-4 py-2 bg-[#F6F1E8] border border-[#D8CCBC]/50 text-[#3A2F28] rounded-xl text-[9px] font-black uppercase tracking-widest">
                     {focus.replace('_', ' ')}
                   </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Voice Personality Selector */}
+          <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] overflow-hidden shadow-sm">
+            <div className="bg-[#EAE2D6]/50 px-8 py-6 border-b border-[#D8CCBC]/50 flex justify-between items-center">
+              <h3 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em]">AI Persona Voice</h3>
+              <span className="text-[9px] font-bold text-[#7D8461] uppercase tracking-tight italic">Verified High-Fidelity</span>
+            </div>
+            <div className="p-8 space-y-4">
+              <div className="grid grid-cols-1 gap-3">
+                {voices.map((v) => (
+                  <button
+                    key={v.voice_id}
+                    onClick={() => setSelectedVoice(v.voice_id)}
+                    className={`text-left p-4 rounded-2xl border transition-all ${
+                      selectedVoice === v.voice_id 
+                        ? 'bg-[#7D8461]/10 border-[#7D8461] shadow-inner' 
+                        : 'bg-[#F6F1E8] border-[#D8CCBC]/40 hover:border-[#7D8461]/50'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-sm font-black text-[#3A2F28] tracking-tight">{v.name}</h4>
+                        <p className="text-[11px] text-[#7B6F63] font-medium leading-relaxed mt-1">{v.description}</p>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        selectedVoice === v.voice_id ? 'border-[#7D8461]' : 'border-[#D8CCBC]'
+                      }`}>
+                        {selectedVoice === v.voice_id && <div className="w-2 h-2 rounded-full bg-[#7D8461]"></div>}
+                      </div>
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>

@@ -69,7 +69,7 @@ Return ONLY a valid JSON object matching this exact structure:
 `
 
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: [{ role: 'user', content: extractionPrompt }],
       response_format: { type: 'json_object' },
       temperature: 0.3

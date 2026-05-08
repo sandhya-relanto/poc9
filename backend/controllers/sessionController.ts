@@ -2,6 +2,7 @@ import { supabase } from '../db/supabase'
 import Groq from 'groq-sdk'
 import { generateSystemInstruction } from '../utils/promptGenerator'
 import { generateEvaluationPrompt } from '../utils/evaluationGenerator'
+import { generateSpeech } from '../utils/elevenlabs'
 
 export const getMySessions = async (req: any, res: any) => {
   const repId = req.user.id
@@ -51,7 +52,7 @@ export const getMySessions = async (req: any, res: any) => {
 
 
 export const startPractice = async (req: any, res: any) => {
-  const { scenarioId, assignmentId } = req.body
+  const { scenarioId, assignmentId, voiceId } = req.body
   const repId = req.user.id
 
   const { data, error } = await supabase
@@ -59,7 +60,8 @@ export const startPractice = async (req: any, res: any) => {
     .insert({
       rep_id: repId,
       scenario_id: scenarioId,
-      messages_json: []
+      messages_json: [],
+      selected_voice_id: voiceId || 'Xb7hH8MSUJpSbSDYk0k2'
     })
     .select('id')
     .single()
@@ -158,7 +160,7 @@ export const sendMessage = async (req: any, res: any) => {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' })
     
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
       messages: messagesPayload,
       max_tokens: 80,
       temperature: 0.7
@@ -175,7 +177,14 @@ export const sendMessage = async (req: any, res: any) => {
       .update({ messages_json: updatedHistory })
       .eq('id', sessionId)
       
-    return res.json({ reply: replyText })
+    // --- ElevenLabs TTS Integration ---
+    const voiceId = session.selected_voice_id || scenario.voice_id || 'Xb7hH8MSUJpSbSDYk0k2';
+    const audioBase64 = await generateSpeech(replyText, voiceId);
+
+    return res.json({ 
+      reply: replyText,
+      audio: audioBase64 
+    })
   } catch (err: any) {
     console.error("Groq error:", err)
     return res.status(200).json({
@@ -242,7 +251,7 @@ export const sendVoiceMessage = async (req: any, res: any) => {
     messagesPayload.push({ role: 'user', content: userText })
 
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
       messages: messagesPayload,
       max_tokens: 80,
       temperature: 0.7
@@ -257,7 +266,15 @@ export const sendVoiceMessage = async (req: any, res: any) => {
       .update({ messages_json: updatedHistory })
       .eq('id', sessionId)
 
-    return res.json({ userText, reply: replyText })
+    // --- ElevenLabs TTS Integration ---
+    const voiceId = session.selected_voice_id || scenario.voice_id || 'Xb7hH8MSUJpSbSDYk0k2';
+    const audioBase64 = await generateSpeech(replyText, voiceId);
+
+    return res.json({ 
+      userText, 
+      reply: replyText,
+      audio: audioBase64
+    })
   } catch (err: any) {
     console.error("Voice message error:", err)
     return res.status(500).json({ error: err.message })
@@ -347,7 +364,7 @@ export const endSession = async (req: any, res: any) => {
     let feedback;
     try {
       const completion = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: 'You are an expert sales coach analyst. Return only raw JSON.' },
           { role: 'user', content: prompt }
@@ -414,3 +431,14 @@ export const deleteSession = async (req: any, res: any) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+export const getVoices = async (req: any, res: any) => {
+  const { data, error } = await supabase
+    .from('ai_voices')
+    .select('*')
+    .eq('is_active', true)
+    .order('name');
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+};

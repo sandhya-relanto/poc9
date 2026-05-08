@@ -231,11 +231,19 @@ export default function TrainingPage() {
                             {new Date(assign.deadline).toLocaleDateString()}
                          </td>
                          <td className="px-10 py-6 text-right">
-                            {assign.status === 'Completed' ? (
-                              <span className="text-2xl font-extrabold text-[#7D8461] tracking-tighter">{assign.score}%</span>
-                            ) : (
-                              <span className="text-[9px] font-black text-[#D8CCBC] uppercase tracking-widest">Pending</span>
-                            )}
+                            <div className="flex flex-col items-end">
+                              <span className={`text-2xl font-extrabold tracking-tighter ${assign.score > 0 ? 'text-[#7D8461]' : 'text-[#D8CCBC]'}`}>
+                                 {assign.score}%
+                              </span>
+                              <div className="flex flex-col items-end mt-1">
+                                 <span className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">
+                                    Attempts: {assign.attempts || '0/3'}
+                                 </span>
+                                 {assign.score > 0 && (
+                                    <span className="text-[8px] font-bold text-[#7D8461] uppercase tracking-tight italic">Best achieved</span>
+                                 )}
+                              </div>
+                            </div>
                          </td>
                          <td className="px-10 py-6 text-right space-x-4">
                              <button 

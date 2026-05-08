@@ -891,7 +891,7 @@ export const getMyAssignments = async (req: any, res: any) => {
     let assignmentsData: any[] = [];
     let assignmentsError: any = null;
 
-    // Try with session_id first (resilient approach)
+    // Try with best-of-3 fields first (resilient approach)
     const firstTry = await supabase
       .from('training_assignments')
       .select(`
@@ -903,6 +903,9 @@ export const getMyAssignments = async (req: any, res: any) => {
         assigned_at, 
         completed_at, 
         session_id,
+        attempt_count,
+        best_score,
+        best_session_id,
         manager:users!manager_id (name),
         scenario:training_scenarios (
           id,
@@ -914,8 +917,8 @@ export const getMyAssignments = async (req: any, res: any) => {
       .eq('rep_id', repId)
       .order('created_at', { ascending: false })
 
-    if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
-      console.warn(`[getMyAssignments] session_id column missing, falling back to basic fetch`);
+    if (firstTry.error && firstTry.error.message.includes('column "attempt_count" does not exist')) {
+      console.warn(`[getMyAssignments] best-of-3 columns missing, falling back to basic fetch`);
       const secondTry = await supabase
         .from('training_assignments')
         .select(`
@@ -926,6 +929,7 @@ export const getMyAssignments = async (req: any, res: any) => {
           deadline, 
           assigned_at, 
           completed_at,
+          session_id,
           manager:users!manager_id (name),
           scenario:training_scenarios (
             id,
@@ -946,7 +950,8 @@ export const getMyAssignments = async (req: any, res: any) => {
     if (assignmentsError) throw assignmentsError
 
     // Fetch related sessions for scores if we have session_ids
-    const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
+    // We prioritize best_session_id if available, otherwise fallback to session_id
+    const sessionIds = (assignmentsData || []).map(a => a.best_session_id || a.session_id).filter(Boolean)
     let sessionMap: Record<string, any> = {}
     
     if (sessionIds.length > 0) {
@@ -970,8 +975,9 @@ export const getMyAssignments = async (req: any, res: any) => {
       const now = new Date();
       let status = a.status || 'Pending';
       
-      const feedback = a.session_id ? sessionMap[a.session_id] : null;
-      const score = feedback?.overall_score || 0;
+      // Prioritize explicit best_score column, fallback to session lookup
+      const feedback = (a.best_session_id || a.session_id) ? sessionMap[a.best_session_id || a.session_id] : null;
+      const score = a.best_score || feedback?.overall_score || 0;
 
       if (status !== 'Completed' && now > deadlineDate) {
         status = 'Overdue';
@@ -981,6 +987,8 @@ export const getMyAssignments = async (req: any, res: any) => {
         ...a,
         status,
         score,
+        attempts: `${a.attempt_count || 0}/3`,
+        attempts_used: a.attempt_count || 0,
         assigned_by: a.manager?.name || 'Manager',
         scenario_name: a.scenario?.persona_name || 'Training Scenario',
         scenario: a.scenario
@@ -1002,7 +1010,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
     let assignmentsData: any[] = [];
     let assignmentsError: any = null;
 
-    // Try with session_id first
+    // Try with best-of-3 fields first
     const firstTry = await supabase
       .from('training_assignments')
       .select(`
@@ -1015,6 +1023,9 @@ export const getTeamAssignments = async (req: any, res: any) => {
         assigned_at,
         completed_at,
         session_id,
+        attempt_count,
+        best_score,
+        best_session_id,
         rep:users!rep_id (name),
         scenario:training_scenarios (
           id,
@@ -1025,8 +1036,8 @@ export const getTeamAssignments = async (req: any, res: any) => {
       .eq('manager_id', managerId)
       .order('created_at', { ascending: false })
 
-    if (firstTry.error && firstTry.error.message.includes('column "session_id" does not exist')) {
-      console.warn(`[getTeamAssignments] session_id column missing, falling back to basic fetch`);
+    if (firstTry.error && firstTry.error.message.includes('column "attempt_count" does not exist')) {
+      console.warn(`[getTeamAssignments] best-of-3 columns missing, falling back to basic fetch`);
       const secondTry = await supabase
         .from('training_assignments')
         .select(`
@@ -1038,6 +1049,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
           deadline,
           assigned_at,
           completed_at,
+          session_id,
           rep:users!rep_id (name),
           scenario:training_scenarios (
             id,
@@ -1060,7 +1072,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
     }
 
     // Fetch related sessions for scores manually
-    const sessionIds = (assignmentsData || []).filter(a => a.session_id).map(a => a.session_id)
+    const sessionIds = (assignmentsData || []).map(a => a.best_session_id || a.session_id).filter(Boolean)
     let sessionMap: Record<string, any> = {}
 
     if (sessionIds.length > 0) {
@@ -1081,8 +1093,8 @@ export const getTeamAssignments = async (req: any, res: any) => {
       const now = new Date();
       let status = a.status || 'Pending';
 
-      const feedback = a.session_id ? sessionMap[a.session_id] : null;
-      const score = feedback?.overall_score || 0;
+      const feedback = (a.best_session_id || a.session_id) ? sessionMap[a.best_session_id || a.session_id] : null;
+      const score = a.best_score || feedback?.overall_score || 0;
 
       if (status !== 'Completed' && now > deadlineDate) {
         status = 'Overdue';
@@ -1092,6 +1104,7 @@ export const getTeamAssignments = async (req: any, res: any) => {
         ...a,
         status,
         score,
+        attempts: `${a.attempt_count || 0}/3`,
         rep_name: a.rep?.name || 'Unknown Rep',
         scenario_name: a.scenario?.persona_name || 'Unknown Scenario',
         difficulty: a.scenario?.difficulty || 'N/A'
@@ -1311,7 +1324,7 @@ export const getMyNotes = async (req: any, res: any) => {
   }
 }
 export const completeAssignment = async (req: any, res: any) => {
-  const { assignmentId } = req.body
+  const { assignmentId, sessionId } = req.body
   const repId = req.user.id
 
   if (!assignmentId) {
@@ -1319,28 +1332,62 @@ export const completeAssignment = async (req: any, res: any) => {
   }
 
   try {
-    console.log(`[completeAssignment] Marking assignment ${assignmentId} as Completed for rep ${repId}`);
+    console.log(`[completeAssignment] Processing attempt for assignment ${assignmentId} (Session: ${sessionId})`);
     
-    const { data, error } = await supabase
+    // 1. Fetch current assignment state
+    const { data: assignment, error: fetchError } = await supabase
+      .from('training_assignments')
+      .select('*')
+      .eq('id', assignmentId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    
+    // 2. Prevent overflow (safety check)
+    if (assignment.attempt_count >= 3) {
+      return res.status(400).json({ error: 'Maximum attempts (3) already reached for this mission.' });
+    }
+
+    // 3. Fetch current session score
+    let currentScore = 0;
+    if (sessionId) {
+      const { data: session } = await supabase
+        .from('training_sessions')
+        .select('feedback_json')
+        .eq('id', sessionId)
+        .single();
+      
+      currentScore = session?.feedback_json?.overall_score || 0;
+    }
+
+    // 4. Calculate new metrics
+    const newAttemptCount = (assignment.attempt_count || 0) + 1;
+    const isNewBest = currentScore > (assignment.best_score || 0);
+    const newBestScore = isNewBest ? currentScore : (assignment.best_score || 0);
+    const newBestSessionId = isNewBest ? sessionId : (assignment.best_session_id || assignment.session_id);
+
+    // 5. Update assignment
+    const { data: updated, error: updateError } = await supabase
       .from('training_assignments')
       .update({
-        status: 'Completed',
-        completed_at: new Date().toISOString()
+        status: newAttemptCount >= 3 ? 'Completed' : (assignment.status === 'Overdue' ? 'Overdue' : 'In Progress'),
+        completed_at: newAttemptCount >= 3 ? new Date().toISOString() : assignment.completed_at,
+        attempt_count: newAttemptCount,
+        best_score: newBestScore,
+        best_session_id: newBestSessionId,
+        session_id: newBestSessionId // Sync with our existing logic for backward compatibility
       })
       .eq('id', assignmentId)
-      .eq('rep_id', repId)
       .select()
-      .single()
+      .single();
 
-    if (error) {
-      console.error(`[completeAssignment] DB Error:`, error.message);
-      throw error
-    }
+    if (updateError) throw updateError;
     
     res.json({ 
       success: true, 
-      message: 'Mission marked as completed.',
-      assignment: data
+      message: newAttemptCount >= 3 ? 'Mission finalized (3/3 attempts).' : `Attempt ${newAttemptCount}/3 recorded.`,
+      assignment: updated,
+      isNewBest
     })
   } catch (err: any) {
     console.error('[completeAssignment] CRITICAL Error:', err.message)

@@ -14,6 +14,12 @@ export default function RepDashboard() {
    const [recentSessions, setRecentSessions] = useState<any[]>([])
    const [assignments, setAssignments] = useState<any[]>([])
    const [notes, setNotes] = useState<any[]>([])
+   
+   // Dashboard UI States
+   const [showMissions, setShowMissions] = useState(true)
+   const [showAnalytics, setShowAnalytics] = useState(true)
+   const [showHistory, setShowHistory] = useState(false)
+   const [showFeedback, setShowFeedback] = useState(true)
 
    useEffect(() => {
       const fetchData = async () => {
@@ -38,13 +44,11 @@ export default function RepDashboard() {
             if (analyticsRes.ok) setAnalytics(await analyticsRes.json())
             if (assignmentsRes.ok) {
                const data = await assignmentsRes.json()
-               console.log('[RepDashboard] Fetched assignments:', data)
                setAssignments(data)
             }
             if (notesRes.ok) setNotes(await notesRes.json())
             if (sessionsRes.ok) {
                const sessions = await sessionsRes.json()
-               console.log('[RepDashboard] Fetched sessions:', sessions)
                setRecentSessions(sessions.filter((s: any) => s.feedback_json && s.feedback_json.overall_score).slice(0, 5))
             }
          } catch (err) {
@@ -66,283 +70,289 @@ export default function RepDashboard() {
    }
 
    const activeAssignments = assignments.filter(a => a.status !== 'Completed')
-   const completedAssignments = assignments.filter(a => a.status === 'Completed')
+   const currentMission = activeAssignments[0] // Highest priority / most recent
 
    return (
-      <div className="max-w-7xl mx-auto space-y-12 pb-20">
-         {/* Header */}
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-            <div>
-               <h1 className="text-4xl font-extrabold text-[#3A2F28] tracking-tight">Bonjour, {repName.split(' ')[0]} 🌿</h1>
-               <p className="text-[#7B6F63] font-medium mt-2 text-base">Your daily performance briefing and training metrics are ready.</p>
+      <div className="max-w-7xl mx-auto space-y-10 pb-20 px-4 md:px-0">
+         
+         {/* SECTION 1: COMPACT HERO HEADER */}
+         <div className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-8 md:p-10 flex flex-col md:flex-row justify-between items-center gap-8 shadow-sm">
+            <div className="flex-1 space-y-1">
+               <h1 className="text-3xl font-black text-[#3A2F28] tracking-tight">Bonjour, {repName.split(' ')[0]} 👋</h1>
+               <div className="flex items-center gap-4 text-[#7B6F63]">
+                  <div className="flex items-center gap-2">
+                     <span className="text-[10px] font-black uppercase tracking-widest">Readiness Score</span>
+                     <span className="text-2xl font-black text-[#7D8461]">{analytics?.avgScore || 0}%</span>
+                  </div>
+                  <span className="h-4 w-[1px] bg-[#D8CCBC]"></span>
+                  <p className="text-sm font-medium">Focused & ready for your next drill.</p>
+               </div>
             </div>
 
+            {currentMission && (
+               <div className="bg-white/50 border border-[#D8CCBC]/50 rounded-3xl p-6 flex items-center gap-6 shadow-inner">
+                  <div className="space-y-1">
+                     <p className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em]">CURRENT MISSION</p>
+                     <h3 className="text-base font-bold text-[#3A2F28] truncate max-w-[200px]">{currentMission.scenario_name}</h3>
+                     <p className="text-[10px] text-[#7B6F63] font-bold">Attempt {currentMission.attempts_used + 1} of 3</p>
+                  </div>
+                  <button 
+                     onClick={() => router.push(`/rep/train/${currentMission.scenario_id}/briefing?assignmentId=${currentMission.id}`)}
+                     className="bg-[#7D8461] hover:bg-[#6B7252] text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shrink-0"
+                  >
+                     Resume Mission
+                  </button>
+               </div>
+            )}
          </div>
 
-         {/* 1. Missions Section */}
-         <section className="space-y-12">
-            <div className="flex justify-between items-center px-2">
-               <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em] flex items-center gap-3">
-                  <span className="w-2 h-2 bg-[#7D8461] rounded-full"></span>
-                  Tactical Mission Command
-               </h2>
-               <Link href="/rep/train" className="text-[10px] font-black text-[#7D8461] uppercase tracking-widest hover:underline">Full Library →</Link>
-            </div>
- 
-            {assignments.length === 0 ? (
-               <div className="bg-[#EAE2D6]/40 border border-dashed border-[#D8CCBC] rounded-[2.5rem] p-24 text-center">
-                  <p className="text-[#7B6F63] font-black uppercase tracking-[0.2em] text-[10px]">No tactical missions deployed yet.</p>
-               </div>
-            ) : (
-               <div className="space-y-12">
-                  {/* Active Sub-section */}
-                  {activeAssignments.length > 0 && (
-                     <div className="space-y-8">
-                        <h3 className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                           <span className="w-1.5 h-1.5 bg-[#7D8461] rounded-full animate-pulse"></span>
-                           Active Deployments
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                           {activeAssignments.map((assign) => (
-                              <div key={assign.id} className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2rem] p-10 hover:shadow-xl transition-all group flex flex-col">
-                                 <div className="flex justify-between items-start mb-8">
-                                    <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border ${assign.status === 'Overdue' ? 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20' : 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20'
+         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            
+            {/* CENTER COLUMN: MISSIONS + FOCUS + PERFORMANCE */}
+            <div className="lg:col-span-8 space-y-10">
+               
+               {/* SECTION 2: ACTIVE MISSIONS */}
+               <section className="space-y-6">
+                  <div 
+                     className="flex justify-between items-center px-2 cursor-pointer group"
+                     onClick={() => setShowMissions(!showMissions)}
+                  >
+                     <h2 className="text-[11px] font-black text-[#3A2F28] uppercase tracking-[0.3em] flex items-center gap-3">
+                        <span className={`transition-transform duration-300 ${showMissions ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                        Active Missions
+                     </h2>
+                     <span className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest group-hover:text-[#7D8461] transition-colors">
+                        {activeAssignments.length} DEPLOYED
+                     </span>
+                  </div>
+
+                  {showMissions && (
+                     <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {activeAssignments.length === 0 ? (
+                           <div className="bg-white border-2 border-dashed border-[#D8CCBC] rounded-[2rem] p-16 text-center">
+                              <p className="text-[#7B6F63] font-black uppercase tracking-widest text-[10px]">No active missions assigned.</p>
+                           </div>
+                        ) : (
+                           activeAssignments.map((assign) => (
+                              <div key={assign.id} className="bg-white border border-[#D8CCBC] rounded-[2.5rem] p-8 flex flex-col md:flex-row gap-8 items-center hover:shadow-xl transition-all group relative overflow-hidden">
+                                 {/* Status Indicator Bar */}
+                                 <div className={`absolute left-0 top-0 bottom-0 w-2 ${assign.status === 'Overdue' ? 'bg-[#A06A5B]' : 'bg-[#7D8461]'}`}></div>
+                                 
+                                 <div className="flex-1 space-y-4">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                       <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${
+                                          assign.status === 'Overdue' 
+                                             ? 'bg-[#A06A5B]/10 text-[#A06A5B] border-[#A06A5B]/20' 
+                                             : 'bg-[#7D8461]/10 text-[#7D8461] border-[#7D8461]/20'
                                        }`}>
-                                       {assign.status}
-                                    </span>
-                                    <span className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">Due {new Date(assign.deadline).toLocaleDateString()}</span>
-                                 </div>
-                                 <h3 className="text-2xl font-bold text-[#3A2F28] mb-4 leading-tight flex-1">{assign.scenario_name}</h3>
- 
-                                 <div className="flex items-center justify-between mt-8 pt-8 border-t border-[#D8CCBC]/50">
-                                    <div>
-                                       <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-1">Priority</p>
-                                       <p className={`text-xs font-bold uppercase tracking-tight ${assign.priority === 'High' ? 'text-[#A06A5B]' : 'text-[#3A2F28]'}`}>{assign.priority}</p>
+                                          {assign.status}
+                                       </span>
+                                       <span className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">
+                                          {assign.scenario?.persona_type || 'EXECUTIVE BUYER'} • {assign.scenario?.difficulty || 'Intermediate'}
+                                       </span>
                                     </div>
-                                    <button
+                                    <h3 className="text-2xl font-black text-[#3A2F28] leading-tight">{assign.scenario_name}</h3>
+                                    <div className="flex items-center gap-8">
+                                       <div>
+                                          <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-1">ATTEMPTS</p>
+                                          <p className="text-xs font-bold text-[#3A2F28]">{assign.attempts_used}/3</p>
+                                       </div>
+                                       <div>
+                                          <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-1">BEST SCORE</p>
+                                          <p className="text-xs font-bold text-[#3A2F28]">{assign.score || 0}%</p>
+                                       </div>
+                                       <div>
+                                          <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest mb-1">DEADLINE</p>
+                                          <p className="text-xs font-bold text-[#3A2F28]">{new Date(assign.deadline).toLocaleDateString()}</p>
+                                       </div>
+                                    </div>
+                                 </div>
+
+                                 <div className="flex flex-col gap-3 w-full md:w-auto">
+                                    <button 
                                        onClick={() => router.push(`/rep/train/${assign.scenario_id}/briefing?assignmentId=${assign.id}`)}
-                                       className="px-8 py-3 bg-[#7D8461] hover:bg-[#6B7252] text-[#F6F1E8] text-[10px] font-black uppercase tracking-[0.15em] rounded-2xl transition-all shadow-md"
+                                       className="bg-[#7D8461] hover:bg-[#6B7252] text-white px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md whitespace-nowrap"
                                     >
-                                       Briefing
+                                       {assign.attempts_used > 0 ? 'Continue Simulation' : 'Start Simulation'}
                                     </button>
-                                 </div>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-                  )}
- 
-                  {/* Completed Sub-section */}
-                  {completedAssignments.length > 0 && (
-                     <div className="space-y-8">
-                        <h3 className="text-[9px] font-black text-[#7B6F63] uppercase tracking-[0.2em] px-2 flex items-center gap-2">
-                           <span className="w-1.5 h-1.5 bg-[#D8CCBC] rounded-full"></span>
-                           Mission Archive
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                           {completedAssignments.map((assign) => (
-                              <div key={assign.id} className="bg-[#EAE2D6]/40 border border-[#D8CCBC] rounded-[2rem] p-10 grayscale-[0.5] hover:grayscale-0 transition-all group flex flex-col">
-                                 <div className="flex justify-between items-start mb-8">
-                                    <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg border bg-[#7D8461]/20 text-[#7D8461] border-[#7D8461]/30">
-                                       {assign.status}
-                                    </span>
-                                    <span className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">
-                                       Score: <span className="text-[#3A2F28] font-black">{assign.score || 0}%</span>
-                                    </span>
-                                 </div>
-                                 <h3 className="text-2xl font-bold text-[#3A2F28]/60 group-hover:text-[#3A2F28] mb-4 leading-tight flex-1">{assign.scenario_name}</h3>
- 
-                                 <div className="flex items-center justify-between mt-8 pt-8 border-t border-[#D8CCBC]/50">
-                                    <p className="text-[10px] font-bold text-[#7B6F63] uppercase tracking-widest">
-                                       Analyzed {new Date(assign.completed_at).toLocaleDateString()}
-                                    </p>
-                                    <Link
+                                    <Link 
                                        href={`/rep/train/${assign.scenario_id}/review?sessionId=${assign.session_id}`}
-                                       className="text-[10px] font-black text-[#7D8461] uppercase tracking-widest hover:underline"
+                                       className="text-center text-[9px] font-black text-[#7B6F63] hover:text-[#7D8461] uppercase tracking-widest transition-colors"
                                     >
-                                       View Report →
+                                       View Last Briefing →
                                     </Link>
                                  </div>
                               </div>
-                           ))}
+                           ))
+                        )}
+                     </div>
+                  )}
+               </section>
+
+               {/* SECTION 3: TODAY'S FOCUS (PERSONALIZED COACHING) */}
+               <section className="bg-[#7D8461] rounded-[2.5rem] p-10 text-white flex flex-col md:flex-row items-center justify-between gap-8 shadow-lg shadow-[#7D8461]/10">
+                  <div className="space-y-3">
+                     <div className="flex items-center gap-3">
+                        <span className="text-2xl">🎯</span>
+                        <h2 className="text-[11px] font-black uppercase tracking-[0.4em] opacity-80">Today's Focus</h2>
+                     </div>
+                     <h3 className="text-3xl font-black tracking-tight">Improve {analytics?.weakestSkill || 'Discovery Skills'}</h3>
+                     <p className="text-white/70 font-medium max-w-md">Your last few sessions showed room for growth in this area. We've prepared a specific drill to help you optimize.</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-[2rem] p-8 flex flex-col items-center gap-4 text-center">
+                     <p className="text-[9px] font-black uppercase tracking-widest opacity-60">RECOMMENDED DRILL</p>
+                     <p className="text-lg font-bold">Executive Negotiation Practice</p>
+                     <button className="bg-white text-[#7D8461] px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#F6F1E8] transition-all shadow-xl">
+                        Start Drill
+                     </button>
+                  </div>
+               </section>
+
+               {/* SECTION 4: PERFORMANCE SNAPSHOT */}
+               <section className="space-y-6">
+                  <div 
+                     className="flex justify-between items-center px-2 cursor-pointer group"
+                     onClick={() => setShowAnalytics(!showAnalytics)}
+                  >
+                     <h2 className="text-[11px] font-black text-[#3A2F28] uppercase tracking-[0.3em] flex items-center gap-3">
+                        <span className={`transition-transform duration-300 ${showAnalytics ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                        Performance Snapshot
+                     </h2>
+                     <Link href="/rep/performance" className="text-[9px] font-black text-[#7D8461] uppercase tracking-widest hover:underline">Full Analytics →</Link>
+                  </div>
+
+                  {showAnalytics && (
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="bg-white border border-[#D8CCBC] rounded-[2rem] p-8 space-y-4">
+                           <p className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em]">READINESS SCORE</p>
+                           <div className="flex items-end gap-2">
+                              <span className="text-5xl font-black text-[#3A2F28] tracking-tighter">{analytics?.avgScore || 0}%</span>
+                              <span className="text-[10px] font-black text-[#7D8461] mb-2 uppercase">↑ {Math.abs(analytics?.trendValue || 0)}%</span>
+                           </div>
+                        </div>
+                        <div className="bg-white border border-[#D8CCBC] rounded-[2rem] p-8 space-y-4">
+                           <p className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em]">TOP SKILL</p>
+                           <h4 className="text-2xl font-black text-[#3A2F28] truncate">{analytics?.strongestSkill || 'Discovery'}</h4>
+                           <p className="text-[10px] font-bold text-[#7B6F63] uppercase tracking-widest">Mastery level reached</p>
+                        </div>
+                        <div className="bg-white border border-[#D8CCBC] rounded-[2rem] p-8 space-y-4">
+                           <p className="text-[9px] font-black text-[#A06A5B] uppercase tracking-[0.2em]">NEEDS IMPROVEMENT</p>
+                           <h4 className="text-2xl font-black text-[#3A2F28] truncate">{analytics?.weakestSkill || 'Closing'}</h4>
+                           <p className="text-[10px] font-bold text-[#A06A5B] uppercase tracking-widest">Priority for practice</p>
                         </div>
                      </div>
                   )}
-               </div>
-            )}
-         </section>
+               </section>
 
-         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-            {/* Left Col */}
-            <div className="lg:col-span-8 space-y-12">
-               {/* Performance Status Section */}
-               <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] overflow-hidden shadow-sm">
-                  <div className="p-10 border-b border-[#D8CCBC]/50 flex justify-between items-center bg-[#D6C2A8]/10">
-                     <div>
-                        <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.2em]">Performance Intelligence</h2>
-                        <p className="text-xs text-[#7B6F63] font-medium mt-1">Cross-functional metric analysis</p>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em] mb-1">Proficiency Index</p>
-                        <p className="text-6xl font-extrabold text-[#3A2F28] tracking-tighter">{analytics?.avgScore || 0}%</p>
-                     </div>
+               {/* SECTION 5: RECENT PERFORMANCE TIMELINE */}
+               <section className="space-y-6">
+                  <div 
+                     className="flex justify-between items-center px-2 cursor-pointer group"
+                     onClick={() => setShowHistory(!showHistory)}
+                  >
+                     <h2 className="text-[11px] font-black text-[#3A2F28] uppercase tracking-[0.3em] flex items-center gap-3">
+                        <span className={`transition-transform duration-300 ${showHistory ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                        Mission History
+                     </h2>
                   </div>
 
-                  <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-12">
-                     {/* Skill Highlights */}
-                     <div className="space-y-10">
-                        <div className="p-8 bg-[#D6C2A8]/10 border border-[#D8CCBC]/30 rounded-[2rem] space-y-3">
-                           <p className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em]">Primary Strength</p>
-                           <h4 className="text-xl font-bold text-[#3A2F28]">{analytics?.strongestSkill || 'Active Listening'}</h4>
-                           <div className="flex items-center gap-2 text-[#7D8461] font-black text-[10px] uppercase tracking-widest">
-                              <span>{analytics?.trendValue >= 0 ? '↑' : '↓'}</span>
-                              <span>{Math.abs(analytics?.trendValue || 0)}% Optimization</span>
+                  {showHistory && (
+                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {recentSessions.length === 0 ? (
+                           <div className="bg-white/50 border border-dashed border-[#D8CCBC] rounded-[2rem] p-10 text-center">
+                              <p className="text-[#7B6F63] font-bold text-[10px] uppercase tracking-widest">No recent activity found.</p>
                            </div>
-                        </div>
-                        <div className="p-8 bg-[#A06A5B]/5 border border-[#A06A5B]/10 rounded-[2rem] space-y-3">
-                           <p className="text-[9px] font-black text-[#A06A5B] uppercase tracking-[0.2em]">Strategic Focus</p>
-                           <h4 className="text-xl font-bold text-[#3A2F28]">{analytics?.weakestSkill || 'Objection Handling'}</h4>
-                           <div className="flex items-center gap-2 text-[#A06A5B] font-black text-[10px] uppercase tracking-widest">
-                              <span>⚙️</span>
-                              <span>Target for next session</span>
-                           </div>
-                        </div>
-                     </div>
-
-                     {/* AI Recommendations */}
-                     <div className="space-y-8">
-                        <h4 className="text-[10px] font-black text-[#7B6F63] uppercase tracking-[0.3em] mb-2">Practice Directives</h4>
-                        <div className="space-y-5">
-                           {[
-                              { title: 'The Skeptical Buyer', difficulty: 'Hard', type: 'Negotiation' },
-                              { title: 'Discovery Deep-Dive', difficulty: 'Medium', type: 'Discovery' }
-                           ].map((rec, i) => (
-                              <div key={i} className="flex items-center gap-6 p-6 bg-[#F6F1E8] rounded-[1.5rem] border border-[#D8CCBC] hover:border-[#7D8461] transition-all cursor-pointer shadow-sm">
-                                 <div className="w-12 h-12 bg-[#EAE2D6] border border-[#D8CCBC] rounded-xl flex items-center justify-center text-[#7D8461] font-black text-xs">
-                                    {rec.difficulty === 'Hard' ? 'H' : 'M'}
+                        ) : (
+                           recentSessions.map((session) => (
+                              <div key={session.id} className="bg-white border border-[#D8CCBC] rounded-2xl p-6 flex items-center justify-between hover:border-[#7D8461] transition-all cursor-pointer"
+                                 onClick={() => router.push(`/rep/train/${session.scenario_id}/review?sessionId=${session.id}`)}
+                              >
+                                 <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-[#7D8461]/10 flex items-center justify-center text-[#7D8461]">
+                                       ✔
+                                    </div>
+                                    <div>
+                                       <h4 className="text-sm font-bold text-[#3A2F28]">{session.scenario_name}</h4>
+                                       <p className="text-[10px] text-[#7B6F63] font-medium">Completed {new Date(session.completed_at).toLocaleDateString()}</p>
+                                    </div>
                                  </div>
-                                 <div className="flex-1">
-                                    <p className="text-sm font-bold text-[#3A2F28] uppercase tracking-tight">{rec.title}</p>
-                                    <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em] mt-1">{rec.type}</p>
+                                 <div className="text-right">
+                                    <p className="text-lg font-black text-[#7D8461]">{session.feedback_json?.overall_score || 0}%</p>
+                                    <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">SCORE</p>
                                  </div>
-                                 <span className="text-[#D8CCBC]">→</span>
                               </div>
-                           ))}
-                        </div>
+                           ))
+                        )}
                      </div>
-                  </div>
-               </section>
-
-               {/* Skill Matrix */}
-               <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-12 shadow-sm">
-                  <div className="flex justify-between items-center mb-12 px-2">
-                     <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Competency Architecture</h2>
-                  </div>
-
-                  <div className="space-y-12">
-                     {analytics?.radarData?.map((skill: any, i: number) => (
-                        <div key={i} className="space-y-5">
-                           <div className="flex justify-between items-end">
-                              <p className="text-xs font-black text-[#3A2F28] uppercase tracking-widest">{skill.subject}</p>
-                              <p className="text-sm font-extrabold text-[#7D8461]">{skill.A}%</p>
-                           </div>
-                           <div className="w-full bg-[#F6F1E8] h-2.5 rounded-full overflow-hidden border border-[#D8CCBC]/30">
-                              <div
-                                 className="h-full bg-[#7D8461] rounded-full transition-all duration-1000"
-                                 style={{ width: `${skill.A}%` }}
-                              ></div>
-                           </div>
-                        </div>
-                     ))}
-                  </div>
-               </section>
-
-               {/* Recent Reports Table */}
-               <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] overflow-hidden shadow-sm">
-                  <div className="p-10 border-b border-[#D8CCBC]/50 bg-[#D6C2A8]/10">
-                     <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Operational Repository</h2>
-                  </div>
-                  <div className="overflow-x-auto">
-                     <table className="luxury-table">
-                        <thead>
-                           <tr>
-                              <th className="text-[9px] font-black text-[#7B6F63] uppercase tracking-[0.2em]">Mission Identity</th>
-                              <th className="text-[9px] font-black text-[#7B6F63] uppercase tracking-[0.2em]">Completion Date</th>
-                              <th className="text-right text-[9px] font-black text-[#7B6F63] uppercase tracking-[0.2em]">Score Index</th>
-                           </tr>
-                        </thead>
-                        <tbody>
-                           {recentSessions.map((session) => (
-                              <tr key={session.id} onClick={() => router.push(`/rep/train/${session.scenario_id}/review?sessionId=${session.id}`)} className="cursor-pointer group">
-                                 <td>
-                                    <p className="font-bold text-[#3A2F28] group-hover:text-[#7D8461] transition-colors uppercase tracking-tight">{session.scenario_name}</p>
-                                    <p className="text-[9px] text-[#7B6F63] font-black uppercase tracking-[0.2em] mt-1">Tactical Analysis</p>
-                                 </td>
-                                 <td className="text-[10px] font-bold text-[#7B6F63] uppercase tracking-widest">{new Date(session.completed_at).toLocaleDateString()}</td>
-                                 <td className="text-right">
-                                    <span className={`text-xl font-black ${session.feedback_json.overall_score >= 80 ? 'text-[#7D8461]' : 'text-[#3A2F28]'}`}>
-                                       {session.feedback_json.overall_score}%
-                                    </span>
-                                 </td>
-                              </tr>
-                           ))}
-                        </tbody>
-                     </table>
-                  </div>
+                  )}
                </section>
             </div>
 
-            {/* Right Col */}
-            <div className="lg:col-span-4 space-y-12">
-               {/* Coaching Briefing */}
-               <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 shadow-sm">
-                  <div className="flex justify-between items-center mb-10">
-                     <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Manager Directives</h2>
-                     <span className="bg-[#7D8461] text-[#F6F1E8] text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest">{notes.length} NEW</span>
+            {/* RIGHT COLUMN: MANAGER NOTES + QUICK STATS */}
+            <div className="lg:col-span-4 space-y-10">
+               
+               {/* SECTION 6: MANAGER FEEDBACK */}
+               <section className="space-y-6">
+                  <div 
+                     className="flex justify-between items-center px-2 cursor-pointer group"
+                     onClick={() => setShowFeedback(!showFeedback)}
+                  >
+                     <h2 className="text-[11px] font-black text-[#3A2F28] uppercase tracking-[0.3em] flex items-center gap-3">
+                        <span className={`transition-transform duration-300 ${showFeedback ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                        Coaching Notes
+                     </h2>
+                     <span className="bg-[#7D8461] text-white text-[9px] font-black px-2 py-0.5 rounded-full">{notes.length}</span>
                   </div>
 
-                  <div className="space-y-8">
-                     {notes.slice(0, 3).map((note) => (
-                        <div key={note.id} className="p-8 bg-[#F6F1E8] border border-[#D8CCBC] rounded-[2rem] hover:border-[#7D8461] transition-all group">
-                           <div className="flex justify-between items-center mb-6">
-                              <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">{new Date(note.created_at).toLocaleDateString()}</p>
-                              <div className={`w-2.5 h-2.5 rounded-full ${note.priority === 'High' ? 'bg-[#A06A5B]' : 'bg-[#7D8461]'}`}></div>
+                  {showFeedback && (
+                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {notes.length === 0 ? (
+                           <div className="bg-white/50 border border-dashed border-[#D8CCBC] rounded-[2rem] p-10 text-center">
+                              <p className="text-[#7B6F63] font-bold text-[10px] uppercase tracking-widest">No feedback from management yet.</p>
                            </div>
-                           <p className="text-sm font-medium text-[#3A2F28] italic leading-relaxed">
-                              "{note.note_text.length > 120 ? note.note_text.substring(0, 120) + '...' : note.note_text}"
-                           </p>
-                           <div className="flex justify-between items-center mt-8 pt-8 border-t border-[#D8CCBC]/50">
-                              <p className="text-[9px] font-black text-[#7D8461] uppercase tracking-[0.2em]">{note.manager_name}</p>
-                              <button className="text-[9px] font-black text-[#7B6F63] hover:text-[#3A2F28] uppercase tracking-[0.2em] transition-colors">Archive</button>
-                           </div>
-                        </div>
-                     ))}
-                     <Link href="/rep/coaching" className="block w-full text-center py-2 text-[9px] font-black text-[#7B6F63] hover:text-[#3A2F28] uppercase tracking-[0.3em]">Historical Archive →</Link>
-                  </div>
+                        ) : (
+                           notes.slice(0, 4).map((note) => (
+                              <div key={note.id} className="bg-white border border-[#D8CCBC] rounded-2xl p-6 space-y-4 hover:shadow-md transition-all group">
+                                 <p className="text-sm font-medium text-[#3A2F28] italic leading-relaxed">
+                                    "{note.note_text.length > 100 ? note.note_text.substring(0, 100) + '...' : note.note_text}"
+                                 </p>
+                                 <div className="flex justify-between items-center pt-4 border-t border-[#F6F1E8]">
+                                    <div className="flex items-center gap-2">
+                                       <div className="w-6 h-6 rounded-full bg-[#EFE7DC] flex items-center justify-center text-[10px]">👤</div>
+                                       <p className="text-[10px] font-black text-[#7D8461] uppercase tracking-widest">{note.manager_name}</p>
+                                    </div>
+                                    <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-widest">{new Date(note.created_at).toLocaleDateString()}</p>
+                                 </div>
+                              </div>
+                           ))
+                        )}
+                        <Link href="/rep/coaching" className="block text-center text-[9px] font-black text-[#7B6F63] hover:text-[#3A2F28] uppercase tracking-widest mt-4">View All Coaching →</Link>
+                     </div>
+                  )}
                </section>
 
-
-               {/* activity timeline */}
-               <section className="bg-[#EFE7DC] border border-[#D8CCBC] rounded-[2.5rem] p-10 shadow-sm">
-                  <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em] mb-12">Session History</h2>
-                  <div className="space-y-12 relative pl-4">
-                     <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-[#D8CCBC]/40"></div>
-
+               {/* QUICK STATS / ACTIVITY FEED */}
+               <section className="bg-white border border-[#D8CCBC] rounded-[2.5rem] p-8 space-y-8">
+                  <h2 className="text-[10px] font-black text-[#3A2F28] uppercase tracking-[0.3em]">Recent Activity</h2>
+                  <div className="space-y-6 relative pl-4">
+                     <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-[#F6F1E8]"></div>
+                     
                      {[
-                        { type: 'COMPLETED', title: 'Discovery Simulation', date: '2h ago', icon: '🎯' },
-                        { type: 'FEEDBACK', title: 'Note from Manager', date: '5h ago', icon: '💬' },
-                        { type: 'SCORE', title: '+5% Skill Boost', date: 'Yesterday', icon: '📈' }
+                        { title: 'Training Milestone', desc: '5 sessions completed this week', icon: '🏆' },
+                        { title: 'Skill Boost', desc: 'Discovery score increased by 4%', icon: '📈' },
+                        { title: 'New Mission', desc: 'Enterprise CFO Negotiation added', icon: '🆕' }
                      ].map((item, i) => (
-                        <div key={i} className="relative flex gap-8 items-start">
-                           <div className="w-5 h-5 rounded-full bg-[#F6F1E8] border-2 border-[#7D8461] z-10 shadow-sm"></div>
-                           <div className="space-y-2">
-                              <p className="text-[9px] font-black text-[#7B6F63] uppercase tracking-[0.2em]">{item.date} • {item.type}</p>
-                              <p className="text-xs font-bold text-[#3A2F28] uppercase tracking-tight leading-tight">{item.title}</p>
+                        <div key={i} className="relative flex gap-4 items-start">
+                           <div className="w-4 h-4 rounded-full bg-white border-2 border-[#7D8461] z-10 shrink-0 mt-1"></div>
+                           <div>
+                              <p className="text-xs font-bold text-[#3A2F28]">{item.title}</p>
+                              <p className="text-[10px] text-[#7B6F63] font-medium">{item.desc}</p>
                            </div>
                         </div>
                      ))}
                   </div>
                </section>
+
             </div>
          </div>
       </div>

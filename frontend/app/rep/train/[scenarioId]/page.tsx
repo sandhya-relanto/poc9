@@ -34,6 +34,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
   const chunksRef = useRef<BlobPart[]>([])
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
 
 
@@ -139,7 +140,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       { role: 'assistant', content: data.reply }
       ])
 
-      speakText(data.reply)
+      speakText(data.reply, data.audio)
     } catch (err) {
       console.error('Voice error:', err)
       alert('Failed to process voice. Try again.')
@@ -148,7 +149,31 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
     }
   }
 
-  const speakText = (text: string) => {
+  const speakText = (text: string, audioBase64?: string) => {
+    // 1. Try playing high-quality ElevenLabs audio first
+    if (audioBase64) {
+      console.log('[ElevenLabs] Playing high-quality audio response');
+      const audio = new Audio(`data:audio/mpeg;base64,${audioBase64}`);
+      audio.onplay = () => setIsSpeaking(true);
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = (e) => {
+        console.error('[ElevenLabs] Playback error:', e);
+        setIsSpeaking(false);
+      };
+      audio.play().catch(err => {
+        console.error('[ElevenLabs] Failed to play audio:', err);
+        // Fallback if audio.play fails
+        fallbackToNativeTTS(text);
+      });
+      return;
+    }
+
+    // 2. Fallback to native browser TTS
+    fallbackToNativeTTS(text);
+  }
+
+  const fallbackToNativeTTS = (text: string) => {
+    console.log('[TTS] Falling back to native browser speech synthesis');
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.rate = 1.0
@@ -188,6 +213,7 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
       if (res.ok) {
         const data = await res.json()
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
+        speakText(data.reply, data.audio)
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: '(Error: Failed to get AI response)' }])
       }
@@ -216,26 +242,27 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
         console.log(`[Lifecycle] Session ${sessionId} ended successfully. Checking for assignment link...`);
         console.log(`[Lifecycle] assignmentId from searchParams:`, assignmentId);
         
-        // If there was an assignment linked, mark it as completed explicitly
+        // If there was an assignment linked, record this attempt
         if (assignmentId && assignmentId !== 'undefined' && assignmentId !== 'null') {
           try {
-            console.log(`[Lifecycle] Calling complete-assignment for: ${assignmentId}`);
+            console.log(`[Lifecycle] Recording attempt for: ${assignmentId} using Session: ${sessionId}`);
             const completeRes = await fetch(`${API}/api/users/complete-assignment`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
               },
-              body: JSON.stringify({ assignmentId })
+              body: JSON.stringify({ assignmentId, sessionId })
             })
             if (completeRes.ok) {
-              console.log(`[Lifecycle] Assignment ${assignmentId} marked as COMPLETED successfully.`);
+              const resData = await completeRes.json();
+              console.log(`[Lifecycle] Attempt recorded:`, resData.message);
             } else {
               const errData = await completeRes.json();
-              console.error(`[Lifecycle] Failed to complete assignment:`, errData);
+              console.error(`[Lifecycle] Failed to record attempt:`, errData);
             }
           } catch (err) {
-            console.error('[Lifecycle] Error during assignment completion API call:', err)
+            console.error('[Lifecycle] Error during attempt recording API call:', err)
           }
         } else {
           console.log(`[Lifecycle] No valid assignmentId found to mark as completed.`);
@@ -255,76 +282,78 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
   if (loading || !scenario) {
     return (
-      <div className="min-h-screen bg-[#F6F1E8] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#7D8461]"></div>
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[var(--primary)]"></div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen bg-[#3A2F28] flex flex-col font-jakarta text-[#F6F1E8] overflow-hidden">
+    <div className="h-screen bg-[var(--bg)] flex flex-col font-jakarta text-[var(--text)] overflow-hidden">
 
-      {/* Top Bar */}
-      <header className="bg-[#2A221D] border-b border-[#4A3C32] px-6 py-4 flex justify-between items-center shrink-0 z-10">
-        <div className="flex items-center gap-6">
-          <button onClick={handleEndSession} disabled={ending} className="text-[#A06A5B] hover:text-[#8B5C4F] text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors disabled:opacity-50">
-            ← Leave Call
+      <header className="bg-white border-b border-[var(--border)] px-8 py-5 flex justify-between items-center shrink-0 z-10 shadow-sm">
+        <div className="flex items-center gap-8">
+          <button 
+            onClick={handleEndSession} 
+            disabled={ending} 
+            className="text-[var(--text-muted)] hover:text-[var(--text)] text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
+          >
+            <span className="text-lg">←</span> Leave Session
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-sm font-bold tracking-tight text-[#F6F1E8]">Live Simulation</span>
+          <div className="flex items-center gap-3 pl-8 border-l border-[var(--border)]">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
+            <span className="text-sm font-extrabold tracking-tight text-[var(--text)]">LIVE SIMULATION</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-           <div className={`px-4 py-1.5 rounded-lg border flex items-center gap-2 text-[10px] font-bold tracking-widest ${timeLeft < 60 ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-[#3A2F28] border-[#4A3C32] text-[#D8CCBC]'}`}>
-              ⏱ {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
+        <div className="flex items-center gap-6">
+           <div className={`px-5 py-2 rounded-xl border flex items-center gap-2.5 text-[11px] font-bold tracking-widest transition-all ${timeLeft < 60 ? 'bg-red-50 border-red-200 text-red-600' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)]'}`}>
+              <span className="text-sm">⏱</span> {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
            </div>
-           <div className={`px-4 py-1.5 rounded-lg border flex items-center gap-2 text-[10px] font-bold tracking-widest ${Math.floor(messages.length / 2) >= MAX_TURNS - 2 ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-[#3A2F28] border-[#4A3C32] text-[#D8CCBC]'}`}>
-              💬 Turn {Math.floor(messages.length / 2)}/{MAX_TURNS}
+           <div className={`px-5 py-2 rounded-xl border flex items-center gap-2.5 text-[11px] font-bold tracking-widest transition-all ${Math.floor(messages.length / 2) >= MAX_TURNS - 2 ? 'bg-red-50 border-red-200 text-red-600' : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text)]'}`}>
+              <span className="text-sm">💬</span> TURN {Math.floor(messages.length / 2)}/{MAX_TURNS}
            </div>
         </div>
       </header>
 
-      {/* Full-screen Loading Overlay */}
       {ending && (
-        <div className="fixed inset-0 z-[999] bg-[#1F1915] flex flex-col items-center justify-center animate-in fade-in duration-500">
-          <div className="w-20 h-20 border-4 border-[#7D8461] border-t-transparent rounded-full animate-spin mb-8 shadow-[0_0_30px_rgba(125,132,97,0.2)]"></div>
-          <h2 className="text-4xl font-black text-[#F6F1E8] mb-4 tracking-tight uppercase">Session Completed</h2>
+        <div className="fixed inset-0 z-[999] bg-white/90 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-500">
+          <div className="w-20 h-20 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin mb-8"></div>
+          <h2 className="text-3xl font-black text-[var(--text)] mb-4 tracking-tight uppercase">Session Finalized</h2>
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-[#7D8461] rounded-full animate-pulse"></div>
-            <p className="text-[#D8CCBC] text-xs uppercase tracking-[0.3em] font-black">Generating Intelligence Report</p>
-            <div className="w-2 h-2 bg-[#7D8461] rounded-full animate-pulse delay-75"></div>
+            <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-pulse"></div>
+            <p className="text-[var(--text-muted)] text-[11px] uppercase tracking-[0.4em] font-black">Analyzing Performance Data</p>
+            <div className="w-2 h-2 bg-[var(--primary)] rounded-full animate-pulse delay-75"></div>
           </div>
         </div>
       )}
+
       <div className="flex-1 flex min-h-0 overflow-hidden">
 
-        {/* LEFT PANEL: Persona Brief */}
-        <div className="w-1/4 min-w-[300px] border-r border-[#4A3C32] bg-[#2A221D] flex flex-col">
-          <div className="p-6 border-b border-[#4A3C32] shrink-0">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-4">Persona Brief</h2>
-            <h3 className="text-2xl font-extrabold text-[#F6F1E8] mb-1">
+        <div className="w-[22%] min-w-[320px] border-r border-[var(--border)] bg-[var(--panel)] flex flex-col shadow-inner">
+          <div className="p-8 border-b border-[var(--border)] shrink-0 bg-[var(--surface)]/50">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)] mb-5">Persona Intelligence</h2>
+            <h3 className="text-2xl font-black text-[var(--text)] mb-1 leading-tight tracking-tight">
               {scenario.customer_info?.name || scenario.persona_name || 'Target Persona'}
             </h3>
-            <p className="text-xs text-[#D8CCBC] font-medium uppercase tracking-wider">
-              {scenario.persona_type || 'Target Account'}
+            <p className="text-[11px] text-[var(--primary)] font-black uppercase tracking-widest mt-1">
+              {scenario.persona_type || 'Decision Maker'}
             </p>
 
             <div className="flex flex-wrap gap-2 mt-6">
-              {scenario.personality_traits && typeof scenario.personality_traits === 'string' ? (
-                <span className="px-3 py-1 bg-[#3A2F28] border border-[#4A3C32] rounded-full text-[9px] font-black uppercase tracking-widest text-[#7D8461]">
-                  {scenario.personality_traits.substring(0, 50)}...
-                </span>
-              ) : null}
               {scenario.difficulty && (
-                <span className="px-3 py-1 bg-[#3A2F28] border border-[#4A3C32] rounded-full text-[9px] font-black uppercase tracking-widest text-[#A06A5B]">
-                  {scenario.difficulty}
+                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                  scenario.difficulty === 'beginner' ? 'bg-green-100 text-green-700 border-green-200' :
+                  scenario.difficulty === 'intermediate' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                  'bg-orange-100 text-orange-700 border-orange-200'
+                }`}>
+                  Level: {scenario.difficulty}
                 </span>
               )}
             </div>
           </div>
-          <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+          
+          <div className="p-8 flex-1 overflow-y-auto custom-scrollbar space-y-10">
             {(() => {
               if (!scenario?.context_text) return null;
               
@@ -332,18 +361,14 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
               let metadata: any = null;
               let scenarioTitle = scenario.scenario_name || null;
 
-              // Extract SCENARIO_METADATA JSON block
               const metadataMatch = text.match(/\[SCENARIO_METADATA:\s*({.*?})\]/s);
               if (metadataMatch) {
                 try {
                   metadata = JSON.parse(metadataMatch[1]);
                   text = text.replace(metadataMatch[0], '');
-                } catch (e) {
-                  console.error("Failed to parse metadata", e);
-                }
+                } catch (e) { console.error("Failed to parse metadata", e); }
               }
 
-              // Extract SCENARIO title block
               const scenarioMatch = text.match(/\[SCENARIO:\s*(.*?)\]/);
               if (scenarioMatch) {
                 scenarioTitle = scenarioMatch[1];
@@ -352,211 +377,199 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
               text = text.trim();
 
-              const renderList = (content: string) => {
+              const renderSection = (title: string, content: any, isList: boolean = false) => {
                 if (!content) return null;
-                const items = content.split('\n').filter(i => i.trim());
-                if (items.length <= 1 && !content.includes('-') && !content.includes('•')) {
-                  return <p className="text-sm text-[#D8CCBC] leading-relaxed">{content}</p>;
-                }
                 return (
-                  <ul className="list-disc pl-4 text-sm text-[#D8CCBC] space-y-1.5 marker:text-[#A06A5B]">
-                    {items.map((item, i) => {
-                      const cleaned = item.replace(/^[-*•]\s*/, '').trim();
-                      return cleaned ? <li key={i} className="leading-relaxed pl-1">{cleaned}</li> : null;
-                    })}
-                  </ul>
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">{title}</h4>
+                    {isList ? (
+                      <ul className="space-y-2.5">
+                        {content.split('\n').filter((i: string) => i.trim()).map((item: string, i: number) => (
+                          <li key={i} className="flex gap-3 text-base text-[var(--text)] leading-relaxed">
+                            <span className="text-[var(--primary)] font-black mt-1">•</span>
+                            <span className="font-medium">{item.replace(/^[-*•]\s*/, '').trim()}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-base text-[var(--text)] leading-relaxed font-medium">{content}</p>
+                    )}
+                  </div>
                 );
               };
 
               return (
-                <div className="space-y-8">
-                  {scenarioTitle && (
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-2">Scenario</h4>
-                      <p className="text-sm font-bold text-[#F6F1E8] leading-relaxed">{scenarioTitle}</p>
-                    </div>
-                  )}
-
-                  {text && (
-                    <div>
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-2">Goal & Context</h4>
-                      <p className="text-sm text-[#D8CCBC] leading-relaxed whitespace-pre-wrap">{text}</p>
-                    </div>
-                  )}
-
+                <>
+                  {renderSection("Strategic Scenario", scenarioTitle)}
+                  {renderSection("Operational Objective", text)}
                   {metadata && (
                     <>
-                      {metadata.personality_traits && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-2">Personality</h4>
-                          <p className="text-sm text-[#D8CCBC] leading-relaxed">{metadata.personality_traits}</p>
-                        </div>
-                      )}
-
-                      {metadata.objection_style && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-2">Objection Style</h4>
-                          {renderList(metadata.objection_style)}
-                        </div>
-                      )}
-
-                      {metadata.evaluation_focus && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-2">Evaluation Focus</h4>
-                          {renderList(metadata.evaluation_focus)}
-                        </div>
-                      )}
-
-                      {metadata.conversation_expectations && (
-                        <div>
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B] mb-2">Expectations</h4>
-                          <p className="text-sm text-[#D8CCBC] leading-relaxed">{metadata.conversation_expectations}</p>
-                        </div>
-                      )}
+                      {renderSection("Behavioral Traits", metadata.personality_traits)}
+                      {renderSection("Resistance Profile", metadata.objection_style, true)}
+                      {renderSection("Key Success Metrics", metadata.evaluation_focus, true)}
                     </>
                   )}
-                </div>
+                </>
               );
             })()}
           </div>
         </div>
 
-        {/* CENTER PANEL: AI Avatar */}
-        <div className="flex-1 flex flex-col bg-[#3A2F28] relative">
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            {/* Big Avatar */}
-            <div className={`w-48 h-48 rounded-full bg-[#2A221D] border-4 flex items-center justify-center relative shadow-2xl transition-all duration-500 ${isSpeaking ? 'border-[#7D8461] scale-105 shadow-[#7D8461]/20' : 'border-[#4A3C32]'}`}>
-              <span className="text-6xl font-black text-[#F6F1E8] tracking-tighter">
-                {(scenario.customer_info?.name || scenario.persona_name || 'T').substring(0, 2).toUpperCase()}
-              </span>
-              <div className={`absolute bottom-2 right-2 w-10 h-10 rounded-full flex items-center justify-center border-4 border-[#3A2F28] ${isSpeaking ? 'bg-[#7D8461]' : 'bg-[#4A3C32]'}`}>
-                <span className="text-white text-sm">🔊</span>
+        <div className="flex-1 flex flex-col bg-white relative">
+          <div className="flex-1 flex flex-col items-center justify-center p-12 bg-[radial-gradient(circle_at_center,rgba(125,132,97,0.05)_0%,transparent_70%)]">
+            <div className="relative group">
+              <div className={`w-56 h-56 rounded-[3rem] bg-[var(--panel)] border-2 flex items-center justify-center relative shadow-2xl transition-all duration-700 ease-out ${isSpeaking ? 'border-[var(--primary)] scale-105 shadow-[0_20px_50px_rgba(125,132,97,0.2)]' : 'border-[var(--border)] grayscale-[20%] group-hover:grayscale-0'}`}>
+                <span className="text-7xl font-black text-[var(--text)] tracking-tighter opacity-80">
+                  {(scenario.customer_info?.name || scenario.persona_name || 'T').substring(0, 2).toUpperCase()}
+                </span>
+                
+                <div className={`absolute -bottom-4 -right-4 w-14 h-14 rounded-2xl flex items-center justify-center border-4 border-white shadow-xl transition-all duration-300 ${isSpeaking ? 'bg-[var(--primary)] scale-110' : 'bg-[var(--text-muted)] scale-90 opacity-0'}`}>
+                  <span className="text-white text-xl animate-pulse">🔊</span>
+                </div>
               </div>
             </div>
 
-            <h2 className="mt-8 text-3xl font-extrabold text-[#F6F1E8]">
-              {scenario.customer_info?.name || scenario.persona_name || 'Target Persona'}
-            </h2>
-            <p className="text-sm font-white text-[#D8CCBC] uppercase tracking-[0.2em] mt-2">
-              {scenario.persona_type || 'Target Account'}
-            </p>
+            <div className="mt-12 text-center space-y-2">
+              <h2 className="text-4xl font-black text-[var(--text)] tracking-tight">
+                {scenario.customer_info?.name || scenario.persona_name || 'Target Persona'}
+              </h2>
+              <div className="flex items-center justify-center gap-3">
+                <span className="h-[1px] w-8 bg-[var(--border)]"></span>
+                <p className="text-[11px] font-black text-[var(--primary)] uppercase tracking-[0.3em]">
+                  {scenario.persona_type || 'EXECUTIVE LEADERSHIP'}
+                </p>
+                <span className="h-[1px] w-8 bg-[var(--border)]"></span>
+              </div>
+            </div>
 
-            {/* Waveform / Status */}
-            <div className="mt-8 h-12 flex items-center justify-center">
+            <div className="mt-12 h-16 w-64 flex items-center justify-center bg-[var(--surface)]/30 rounded-3xl border border-[var(--border)]/50 px-8">
               {isSpeaking ? (
-                <div className="flex justify-center items-center gap-1.5 h-8">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className={`w-2 bg-[#7D8461] rounded-full animate-voice-wave`} style={{ animationDelay: `${i * 0.15}s` }}></div>
+                <div className="flex justify-center items-center gap-2 h-10 w-full">
+                  {[...Array(12)].map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="w-1 bg-[var(--primary)] rounded-full animate-voice-wave" 
+                      style={{ 
+                        animationDelay: `${i * 0.08}s`,
+                        height: `${30 + Math.random() * 70}%`
+                      }}
+                    ></div>
                   ))}
                 </div>
               ) : isProcessing ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 bg-[#7D8461] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-2.5 h-2.5 bg-[#7D8461] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-2.5 h-2.5 bg-[#7D8461] rounded-full animate-bounce"></div>
+                <div className="flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 bg-[var(--primary)] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-2.5 h-2.5 bg-[var(--primary)] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2.5 h-2.5 bg-[var(--primary)] rounded-full animate-bounce"></div>
                 </div>
               ) : (
-                <div className="flex justify-center items-center gap-1.5 h-4 opacity-30">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="w-2 bg-[#7B6F63] rounded-full h-2"></div>
+                <div className="flex justify-center items-center gap-2 opacity-20">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full"></div>
                   ))}
                 </div>
               )}
             </div>
+
             {isSpeaking && (
               <button
                 onClick={() => window.speechSynthesis.cancel()}
-                className="mt-6 text-[9px] font-black uppercase tracking-widest bg-transparent border border-[#4A3C32] hover:bg-[#4A3C32] px-4 py-2 rounded-lg text-[#D8CCBC] hover:text-[#F6F1E8] transition-all"
+                className="mt-8 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-[var(--border)] text-[var(--text-muted)] hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all flex items-center gap-2"
               >
-                Mute Target
+                <span>✕</span> Stop Voice Playback
               </button>
             )}
           </div>
 
-          {/* Unified Input Bar */}
-          <div className="p-6 border-t border-[#4A3C32] bg-[#2A221D] shrink-0">
-            <div className="max-w-3xl mx-auto flex items-center gap-4">
-              <div className="flex flex-col items-center justify-center px-4 w-16">
-                <span className="text-xl">{isRecording ? '⏹' : '🎤'}</span>
-                <span className="text-[7px] font-black text-[#A06A5B] uppercase tracking-widest mt-1 text-center">
-                  Your Audio
-                </span>
-              </div>
-              <form onSubmit={handleSend} className="flex-1 relative">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={e => setInputText(e.target.value)}
-                  disabled={isTyping || ending || isRecording || isProcessing}
-                  placeholder={isRecording ? "Recording your voice..." : "Type your response..."}
-                  className="w-full bg-[#3A2F28] border border-[#4A3C32] rounded-[1.5rem] px-6 py-4 text-[#F6F1E8] placeholder-[#A06A5B]/70 focus:outline-none focus:border-[#7D8461] transition-all font-medium disabled:opacity-50"
-                />
-              </form>
-              <button
-                type="button"
-                onClick={handleMicClick}
-                disabled={isProcessing || isSpeaking || ending}
-                className={`w-14 h-14 shrink-0 rounded-full flex items-center justify-center text-xl transition-all shadow-lg ${isRecording
-                  ? 'bg-[#A06A5B] text-white animate-pulse'
-                  : 'bg-[#A06A5B] hover:bg-[#8B5C4F] text-[#F6F1E8]'
+          <div className="p-8 border-t border-[var(--border)] bg-white shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.02)]">
+            <div className="max-w-4xl mx-auto flex items-center gap-6">
+              <div className="flex items-center gap-4 flex-1">
+                <div className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center text-2xl transition-all shadow-lg cursor-pointer ${isRecording
+                  ? 'bg-red-500 text-white animate-pulse shadow-red-200'
+                  : 'bg-[var(--panel)] text-[var(--text)] hover:bg-[var(--border)] shadow-sm'
                   }`}
-              >
-                {isRecording ? '⏹' : '🎤'}
-              </button>
-              <button
-                type="button"
-                onClick={(e: any) => handleSend(e)}
-                disabled={!inputText.trim() || isTyping || ending || isRecording}
-                className="w-14 h-14 shrink-0 bg-[#4A3C32] hover:bg-[#5C4E43] disabled:opacity-50 disabled:hover:bg-[#4A3C32] text-[#F6F1E8] rounded-full flex items-center justify-center transition-all shadow-md"
-              >
-                ➔
-              </button>
+                  onClick={handleMicClick}
+                >
+                  {isRecording ? '⏹' : '🎤'}
+                </div>
+                
+                <form onSubmit={handleSend} className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
+                    disabled={isTyping || ending || isRecording || isProcessing}
+                    placeholder={isRecording ? "Listening to your audio input..." : "Draft your communication..."}
+                    className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-2xl px-7 py-5 text-lg text-[var(--text)] placeholder-[var(--text-muted)]/50 focus:outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/5 transition-all font-medium disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!inputText.trim() || isTyping || ending || isRecording}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 bg-[var(--primary)] hover:bg-[var(--primary-hover)] disabled:opacity-30 text-white rounded-xl flex items-center justify-center transition-all shadow-md"
+                  >
+                    <span className="text-lg">➔</span>
+                  </button>
+                </form>
+              </div>
+
+              <div className="h-10 w-[1px] bg-[var(--border)] opacity-50"></div>
+
               <button
                 onClick={handleEndSession}
                 disabled={ending}
-                className="ml-2 px-6 py-4 bg-transparent hover:bg-red-500/10 border border-[#4A3C32] hover:border-red-500/30 text-[#A06A5B] hover:text-red-400 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all"
+                className="px-8 py-4.5 bg-white hover:bg-red-50 border border-[var(--border)] hover:border-red-200 text-red-600 font-black text-[11px] uppercase tracking-widest rounded-2xl transition-all shadow-sm"
               >
-                {ending ? 'Wait...' : 'End'}
+                {ending ? 'Processing...' : 'End Briefing'}
               </button>
             </div>
           </div>
         </div>
 
-        {/* RIGHT PANEL: Conversation */}
-        <div className="w-[30%] min-w-[350px] border-l border-[#4A3C32] bg-[#2A221D] flex flex-col">
-          <div className="p-6 border-b border-[#4A3C32] shrink-0">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#A06A5B]">Conversation History</h2>
+        <div className="w-[28%] min-w-[380px] border-l border-[var(--border)] bg-white flex flex-col">
+          <div className="p-8 border-b border-[var(--border)] shrink-0 flex justify-between items-center bg-[var(--surface)]/30">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--text-muted)]">Communication Log</h2>
+            <span className="px-2.5 py-1 bg-white border border-[var(--border)] rounded-md text-[9px] font-black text-[var(--text-muted)]">ENCRYPTED</span>
           </div>
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          
+          <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center opacity-30 text-center space-y-4 px-10">
+                <div className="text-4xl">💬</div>
+                <p className="text-xs font-bold uppercase tracking-widest">Awaiting Initial Contact</p>
+              </div>
+            )}
+            
             {messages.map((m, idx) => (
-              <div key={idx} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div key={idx} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-2 duration-300`}>
                 <div
-                  className={`max-w-[90%] rounded-2xl px-5 py-4 text-sm font-medium shadow-sm leading-relaxed ${
+                  className={`max-w-[85%] rounded-2xl px-6 py-4.5 text-base font-semibold shadow-sm leading-relaxed ${
                     m.role === 'user'
-                      ? 'bg-[#A06A5B] text-white rounded-tr-sm'
-                      : 'bg-[#3A2F28] text-white border border-[#4A3C32] rounded-tl-sm'
+                      ? 'bg-[var(--primary)] text-white rounded-tr-none'
+                      : 'bg-[var(--panel)] text-[var(--text)] border border-[var(--border)] rounded-tl-none shadow-none'
                   }`}
                 >
                   <p className="whitespace-pre-wrap text-inherit">{m.content}</p>
                 </div>
-                <span className="text-[9px] font-black uppercase tracking-widest text-[#A06A5B] mt-2">
-                  {m.role === 'user' ? 'You' : scenario.customer_info?.name || scenario.persona_name || 'Target'}
-                </span>
+                <div className="flex items-center gap-2 mt-2.5">
+                   <span className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)]">
+                    {m.role === 'user' ? 'REPRESENTATIVE' : (scenario.customer_info?.name || scenario.persona_name || 'TARGET').toUpperCase()}
+                  </span>
+                  <span className="text-[8px] text-[var(--border)]">•</span>
+                  <span className="text-[8px] text-[var(--text-muted)] font-bold">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
               </div>
             ))}
+            
             {(isTyping || isProcessing) && (
-              <div className="flex flex-col items-start">
-                <div className="bg-[#3A2F28] border border-[#4A3C32] text-white rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 shadow-sm">
-                  <div className="w-1.5 h-1.5 bg-[#7D8461] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#7D8461] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#7D8461] rounded-full animate-bounce"></div>
+              <div className="flex flex-col items-start animate-pulse">
+                <div className="bg-[var(--panel)] border border-[var(--border)] text-[var(--text)] rounded-2xl rounded-tl-none px-6 py-4.5 flex items-center gap-2.5 shadow-sm">
+                  <div className="w-1.5 h-1.5 bg-[var(--primary)] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-1.5 h-1.5 bg-[var(--primary)] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-1.5 h-1.5 bg-[var(--primary)] rounded-full animate-bounce"></div>
                 </div>
-                <span className="text-[9px] font-black uppercase tracking-widest text-[#A06A5B] mt-2">
-                  {scenario.customer_info?.name || scenario.persona_name || 'Target'}
-                </span>
               </div>
             )}
-
+            <div ref={messagesEndRef} />
           </div>
         </div>
 
@@ -564,21 +577,25 @@ export default function PracticeChatPage({ params }: { params: { scenarioId: str
 
       <style jsx>{`
         @keyframes voice-wave {
-          0%, 100% { height: 20%; }
-          50% { height: 100%; }
+          0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+          50% { transform: scaleY(1.2); opacity: 1; }
         }
         .animate-voice-wave {
-          animation: voice-wave 0.6s ease-in-out infinite;
+          animation: voice-wave 0.8s ease-in-out infinite;
+          transform-origin: center;
         }
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
+          width: 5px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #3A2F28;
+          background-color: var(--border);
           border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: var(--text-muted);
         }
       `}</style>
     </div>

@@ -9,7 +9,8 @@ import {
   sendVoiceMessage, 
   endSession, 
   getSession,
-  deleteSession
+  deleteSession,
+  getVoices
 } from '../controllers/sessionController'
 
 const router = express.Router()
@@ -17,6 +18,9 @@ const upload = multer({ storage: multer.memoryStorage() })
 
 // GET /api/sessions/my-sessions
 router.get('/my-sessions', authenticate, repOnly, getMySessions)
+
+// GET /api/sessions/get-voices
+router.get('/get-voices', authenticate, repOnly, getVoices)
 
 // POST /api/sessions/start
 router.post('/start', authenticate, repOnly, startPractice)
